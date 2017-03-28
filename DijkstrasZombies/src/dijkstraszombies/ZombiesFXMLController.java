@@ -5,7 +5,11 @@
  */
 package dijkstraszombies;
 
+import graph.Graph;
+import graph.Vertex;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.Hashtable;
 import java.util.ResourceBundle;
 import java.util.Timer;
@@ -18,7 +22,10 @@ import javafx.geometry.Bounds;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
@@ -56,46 +63,61 @@ public class ZombiesFXMLController implements Initializable {
     private final Player player = new Player();
     private final Hashtable<Bullet, Rectangle> bullets = new Hashtable<>();
     
+    private final int gridWidth = 100;
+    private final int gridHeight = 100;
+    private final Graph graph;
+    
     @FXML
-    private AnchorPane root;
+    private AnchorPane anchorPane;
+    @FXML
+    private GridPane gridPane;
     
     public ZombiesFXMLController() {
         player.setHealth(100);
         player.setSpeed(1.5);
         player.wield(new Weapon(1, 5));
+        
+        graph = new Graph(gridWidth * gridHeight);
+        gridify(graph, gridWidth, gridHeight);
     }
     
     @Override
     public void initialize(URL url, ResourceBundle rb) {
-        player.setX((root.getPrefWidth() / 2) - (playerWidth / 2));
-        player.setY((root.getPrefHeight() / 2) - (playerWidth / 2));
+        player.setX((anchorPane.getPrefWidth() / 2) - (playerWidth / 2));
+        player.setY((anchorPane.getPrefHeight() / 2) - (playerWidth / 2));
         
         playerRect = new Rectangle(player.getX(), player.getY(), playerWidth, playerHeight);
         playerRect.setFill(playerColor);
         
+        // Forward mouse events from gridPane to anchorPane
+//        gridPane.addEventHandler(MouseEvent.ANY, (mouseEvent) -> {
+//            anchorPane.fireEvent(mouseEvent.copyFor(anchorPane, anchorPane));
+//            mouseEvent.consume();
+//        });
+        
         // Get mouse position
-        root.setOnMouseMoved((mouseEvent) -> {
+        anchorPane.setOnMouseMoved((mouseEvent) -> {
             mouseX = mouseEvent.getX();
             mouseY = mouseEvent.getY();
         });
         
-        root.setOnMouseDragged((mouseEvent) -> {
+        anchorPane.setOnMouseDragged((mouseEvent) -> {
             mouseX = mouseEvent.getX();
             mouseY = mouseEvent.getY();
         });
-        
+            
         // Get mouse clicked value
-        root.setOnMousePressed((mouseEvent) -> {
+        anchorPane.setOnMousePressed((mouseEvent) -> {
             if(click != true) {
                 click = true;
                 clickCount++;
             }
         });
         
-        root.setOnMouseReleased((mouseEvent) -> {
+        anchorPane.setOnMouseReleased((mouseEvent) -> {
             click = false;
         });
-        
+       
         TimerTask shootTask = new TimerTask() {
             @Override()
             public void run() {
@@ -113,7 +135,7 @@ public class ZombiesFXMLController implements Initializable {
 
                         bullets.put(bullet, bulletRect);
                         
-                        root.getChildren().add(bulletRect);
+                        anchorPane.getChildren().add(bulletRect);
                     });
                 }
             }
@@ -172,13 +194,13 @@ public class ZombiesFXMLController implements Initializable {
                     Bounds rectBounds = playerRect.getBoundsInParent();
                     if(rectBounds.getMinX() + xMovement < 0) {
                         player.translate(0 - (rectBounds.getMinX() + xMovement), 0);
-                    } else if(rectBounds.getMaxX() + xMovement > root.getWidth()) {
-                        player.translate(root.getWidth() - (rectBounds.getMaxX() + xMovement), 0);
+                    } else if(rectBounds.getMaxX() + xMovement > anchorPane.getWidth()) {
+                        player.translate(anchorPane.getWidth() - (rectBounds.getMaxX() + xMovement), 0);
                     }
                     if(rectBounds.getMinY() + yMovement < 0) {
                         player.translate(0, 0 - (rectBounds.getMinY() + yMovement));
-                    } else if(rectBounds.getMaxY() + yMovement > root.getHeight()) {
-                        player.translate(0, root.getHeight() - (rectBounds.getMaxY() + yMovement));
+                    } else if(rectBounds.getMaxY() + yMovement > anchorPane.getHeight()) {
+                        player.translate(0, anchorPane.getHeight() - (rectBounds.getMaxY() + yMovement));
                     }
                     
                     // Apply translations
@@ -197,19 +219,19 @@ public class ZombiesFXMLController implements Initializable {
                             
                             Bounds bulletBounds = bulletRect.getBoundsInParent();
                             if(bulletBounds.getMaxX() < 0) {
-                                root.getChildren().remove(bulletRect);
+                                anchorPane.getChildren().remove(bulletRect);
                                 bullets.remove(bullet.destroy());
                                 continue;
-                            } else if(bulletBounds.getMinX() > root.getWidth()) {
-                                root.getChildren().remove(bulletRect);
+                            } else if(bulletBounds.getMinX() > anchorPane.getWidth()) {
+                                anchorPane.getChildren().remove(bulletRect);
                                 bullets.remove(bullet.destroy());
                                 continue;
                             }
                             if(bulletBounds.getMaxY() < 0) {
-                                root.getChildren().remove(bulletRect);
+                                anchorPane.getChildren().remove(bulletRect);
                                 bullets.remove(bullet.destroy());
-                            } else if(bulletBounds.getMinY() > root.getHeight()) {
-                                root.getChildren().remove(bulletRect);
+                            } else if(bulletBounds.getMinY() > anchorPane.getHeight()) {
+                                anchorPane.getChildren().remove(bulletRect);
                                 bullets.remove(bullet.destroy());
                             }
                         }
@@ -219,7 +241,7 @@ public class ZombiesFXMLController implements Initializable {
         };
         movePlayerTimer.scheduleAtFixedRate(movePlayerTask, 0, 15);
         
-        root.getChildren().add(playerRect);
+        anchorPane.getChildren().add(playerRect);
     }
     
         private void setArrowValues(KeyCode keyCode, boolean bool) {
@@ -251,12 +273,14 @@ public class ZombiesFXMLController implements Initializable {
         return theta * (180 / Math.PI);
     }
     
+    // Cancel timers - gets called on exit in main method
     public void dispose() {
         movePlayerTimer.cancel();
         shootTimer.cancel();
     }
     
-    public void sceneReady(Scene  scene) {
+    // Add listeners to the scene
+    public void sceneReady(Scene scene) {
         // Get arrow key values
         scene.setOnKeyPressed((keyEvent) -> {
             setArrowValues(keyEvent.getCode(), true);
@@ -265,5 +289,27 @@ public class ZombiesFXMLController implements Initializable {
         scene.setOnKeyReleased((keyEvent) -> {
             setArrowValues(keyEvent.getCode(), false);
         });
+    }
+    
+    // Build edges for a grid-shaped graph of size width and height
+    // Assumes graph was initialized with size (width * height)
+    public void gridify(Graph graph, int width, int height) {
+        for(int i = 0; i < width * height; i++) {
+            // Verticals
+            if(i < (height - 1) * width) {
+                graph.addEdge(graph.getVertex(i), graph.getVertex(i + width));
+                //Diagonals
+                if((i + 1) % width != 0) {
+                    graph.addEdge(graph.getVertex(i), graph.getVertex(i + width + 1), Math.sqrt(2));
+                }
+                if(i % width != 0) {
+                    graph.addEdge(graph.getVertex(i), graph.getVertex(i + width - 1), Math.sqrt(2));
+                }
+            }
+            // Horizontals
+            if((i + 1) % width != 0) {
+                graph.addEdge(graph.getVertex(i), graph.getVertex(i + 1));
+            }
+        }
     }
 }
