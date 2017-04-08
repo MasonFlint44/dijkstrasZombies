@@ -61,6 +61,10 @@ public class Vertex {
         return neighbors.contains(vertex);
     }
     
+    public boolean containsNeighbor(int identity) {
+        return containsNeighbor(new Vertex(identity));
+    }
+    
     public int getIdentity() {
         return identifier;
     }
@@ -95,7 +99,7 @@ public class Vertex {
     }
     
     public class DijkstraInfo {
-        public boolean visited;
+        public boolean settled;
         public double distance = 0;
         public Vertex previous;
     }  

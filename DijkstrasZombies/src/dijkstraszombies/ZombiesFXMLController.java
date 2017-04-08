@@ -9,23 +9,18 @@ import graph.Graph;
 import graph.Vertex;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Hashtable;
 import java.util.ResourceBundle;
 import java.util.Timer;
 import java.util.TimerTask;
 import javafx.application.Platform;
-import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Bounds;
 import javafx.scene.Scene;
-import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.GridPane;
-import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
@@ -45,26 +40,30 @@ public class ZombiesFXMLController implements Initializable {
     private boolean click = false;
     private int clickCount = 0;
     
-    private final double playerWidth = 20;
+    private final double playerWidth = 10;
     private final double playerHeight = 10;
     private final Color playerColor = Color.RED;
     
-    private final double bulletWidth = 10;
+    private final double bulletWidth = 5;
     private final double bulletHeight = 5;
     private final Color bulletColor = Color.BLACK;
     private final double offset = (playerWidth / 2) + (bulletWidth / 2);
     private final double centerWidth = (playerWidth / 2) - (bulletWidth / 2);
     private final double centerHeight = (playerHeight / 2) - (bulletHeight / 2);
     
-    private final Timer movePlayerTimer = new Timer("MovePlayerTimer");
+    private final Timer movementTimer = new Timer("MovementTimer");
     private final Timer shootTimer = new Timer("ShootTimer");
     
     private Rectangle playerRect;
     private final Player player = new Player();
     private final Hashtable<Bullet, Rectangle> bullets = new Hashtable<>();
+    private Point playerCenter;
+    private Vertex playerVertex;
     
     private final int gridWidth = 100;
     private final int gridHeight = 100;
+    private double cellWidth;
+    private double cellHeight;
     private final Graph graph;
     
     @FXML
@@ -83,6 +82,18 @@ public class ZombiesFXMLController implements Initializable {
     
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+//        // Example visualization of dijkstra's algorithm
+//        for(Vertex vertex : graph.dijkstras(graph.getVertex(568), graph.getVertex(7))) {
+//            int index = vertex.getIdentity();
+//            Rectangle rect = new Rectangle(5, 5, Color.RED);
+//            GridPane.setColumnIndex(rect, index % gridWidth);
+//            GridPane.setRowIndex(rect, index / gridWidth);
+//            gridPane.getChildren().add(rect);
+//        }
+
+        cellWidth = gridPane.getPrefWidth() / gridWidth;
+        cellHeight = gridPane.getPrefHeight() / gridHeight;
+        
         player.setX((anchorPane.getPrefWidth() / 2) - (playerWidth / 2));
         player.setY((anchorPane.getPrefHeight() / 2) - (playerWidth / 2));
         
@@ -140,10 +151,10 @@ public class ZombiesFXMLController implements Initializable {
                 }
             }
         };
-        shootTimer.scheduleAtFixedRate(shootTask, 0, 400);
+        shootTimer.scheduleAtFixedRate(shootTask, 0, 300);
         
-        // Move rectangle
-        TimerTask movePlayerTask = new TimerTask() {
+        // Move player
+        TimerTask movementTask = new TimerTask() {
             @Override
             public void run() {
                 // Calculate degrees of rotation
@@ -153,7 +164,7 @@ public class ZombiesFXMLController implements Initializable {
                     double xMovement = 0;
                     double yMovement = 0;
                     
-                    // Move rectangle
+                    // Move player
                     if(left) {
                         double distance = player.getSpeed();
                         if(up || down) {
@@ -187,25 +198,207 @@ public class ZombiesFXMLController implements Initializable {
                         yMovement += distance;
                     }
                     
-                    // Rotate rectangle 
-                    playerRect.setRotate(getDegrees(player.getTheta()));
-                    
                     // If out of bounds, move back in bounds
                     Bounds rectBounds = playerRect.getBoundsInParent();
-                    if(rectBounds.getMinX() + xMovement < 0) {
-                        player.translate(0 - (rectBounds.getMinX() + xMovement), 0);
-                    } else if(rectBounds.getMaxX() + xMovement > anchorPane.getWidth()) {
-                        player.translate(anchorPane.getWidth() - (rectBounds.getMaxX() + xMovement), 0);
-                    }
-                    if(rectBounds.getMinY() + yMovement < 0) {
-                        player.translate(0, 0 - (rectBounds.getMinY() + yMovement));
-                    } else if(rectBounds.getMaxY() + yMovement > anchorPane.getHeight()) {
-                        player.translate(0, anchorPane.getHeight() - (rectBounds.getMaxY() + yMovement));
+                    
+//                    if(rectBounds.getMinX() + xMovement < 0) {
+//                        player.translate(0 - (rectBounds.getMinX() + xMovement), 0);
+//                    } else if(rectBounds.getMaxX() + xMovement > anchorPane.getWidth()) {
+//                        player.translate(anchorPane.getWidth() - (rectBounds.getMaxX() + xMovement), 0);
+//                    }
+//                    if(rectBounds.getMinY() + yMovement < 0) {
+//                        player.translate(0, 0 - (rectBounds.getMinY() + yMovement));
+//                    } else if(rectBounds.getMaxY() + yMovement > anchorPane.getHeight()) {
+//                        player.translate(0, anchorPane.getHeight() - (rectBounds.getMaxY() + yMovement));
+//                    }
+                    
+                    // Get y coordinates of corners
+                    Double rightY = Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2) - Math.pow(playerCenter.getX() - rectBounds.getMinX(), 2));
+                    Double leftY = playerCenter.getY() - rightY;
+                    rightY += playerCenter.getY();
+                    if(rightY.isNaN()) {
+                        leftY = playerCenter.getY();
+                        rightY = playerCenter.getY();
                     }
                     
+                    // Get x coordinates of corners
+                    Double upX = Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2) - Math.pow(playerCenter.getY() - rectBounds.getMinY(), 2));
+                    Double downX = playerCenter.getX() - upX;
+                    upX += playerCenter.getX();
+                    if(upX.isNaN()) {
+                        upX = playerCenter.getX();
+                        downX = playerCenter.getX();
+                    }
+                    
+                    // Swap values based on rotation
+                    double rotation = Math.abs(getDegrees(player.getTheta()));
+                    if(player.getTheta() < 0) {
+                        if((rotation > 45 && rotation < 90) || (rotation > 135 && rotation < 180)) {
+                            // Swap left and right
+                            double swap = leftY;
+                            leftY = rightY;
+                            rightY = swap;
+
+                            // Swap up and down
+                            swap = upX;
+                            upX = downX;
+                            downX = swap;
+                        }
+                    } else if(player.getTheta() > 0) {
+                        if((rotation > 0 && rotation < 45) || (rotation > 90 && rotation < 135)) {
+                            // Swap left and right
+                            double swap = leftY;
+                            leftY = rightY;
+                            rightY = swap;
+
+                            // Swap up and down
+                            swap = upX;
+                            upX = downX;
+                            downX = swap;
+                        }
+                    }
+                    
+                    // Create points of each corner of rectangle
+                    Point left = new Point(rectBounds.getMinX(), leftY);
+                    Point right = new Point(rectBounds.getMaxX(), rightY);
+                    Point up = new Point(upX, rectBounds.getMinY());
+                    Point down = new Point(downX, rectBounds.getMaxY());
+                    
+                    // Create list of points to track for leftward movement
+                    ArrayList<Point> leftTrackPoints = new ArrayList<>();
+                    leftTrackPoints.add(left);
+                    
+                    double slope = (up.getY() - left.getY()) / (up.getX() - left.getX());
+                    for(int leftIndex = getGridX(left.getX()) + 1; leftIndex <= getGridX(up.getX()); leftIndex++) {
+                        double x = leftIndex * cellWidth;
+                        double y = slope * (x - left.getX()) + left.getY();
+                        leftTrackPoints.add(new Point(x, y));
+                    }
+                    slope = (down.getY() - left.getY()) / (down.getX() - left.getX());
+                    for(int leftIndex = getGridX(left.getX()) + 1; leftIndex <= getGridX(down.getX()); leftIndex++) {
+                        double x = leftIndex * cellWidth;
+                        double y = slope * (x - left.getX()) + left.getY();
+                        leftTrackPoints.add(new Point(x, y));
+                    }
+                    for(Point point: leftTrackPoints) {
+                        Vertex vertex = graph.getVertex(getGridIdentity(point));
+                        if(point == left && !vertex.containsNeighbor(vertex.getIdentity() + 1)) {
+                            vertex = graph.getVertex(vertex.getIdentity() + 1);
+                        }
+                        if(!vertex.containsNeighbor(vertex.getIdentity() - 1)) {
+                            double leftEdge = (vertex.getIdentity() % gridWidth) * cellWidth;
+                            if(point.getX() + xMovement < leftEdge) {
+                                double translation = leftEdge - (point.getX() + xMovement);
+                                player.translate(translation, 0);
+                                xMovement += translation;
+                            }
+                        }
+                    }
+                    
+                    // Create list of points to track for rightward movement
+                    ArrayList<Point> rightTrackPoints = new ArrayList<>();
+                    rightTrackPoints.add(right);
+                    
+                    slope = (up.getY() - right.getY()) / (up.getX() - right.getX());
+                    for(int rightIndex = getGridX(right.getX()) - 1; rightIndex >= getGridX(up.getX()); rightIndex--) {
+                        double x = (rightIndex + 1) * cellWidth;
+                        double y = slope * (x - right.getX()) + right.getY();
+                        rightTrackPoints.add(new Point(x, y));
+                    }
+                    slope = (down.getY() - right.getY()) / (down.getX() - right.getX());
+                    for(int rightIndex = getGridX(right.getX()) - 1; rightIndex >= getGridX(down.getX()); rightIndex--) {
+                        double x = (rightIndex + 1) * cellWidth;
+                        double y = slope * (x - right.getX()) + right.getY();
+                        rightTrackPoints.add(new Point(x, y));
+                    }
+                    for(Point point: rightTrackPoints) {
+                        Vertex vertex = graph.getVertex(getGridIdentity(point));
+                        if(point == right && !vertex.containsNeighbor(vertex.getIdentity() - 1)) {
+                            vertex = graph.getVertex(vertex.getIdentity() - 1);
+                        }
+                        if(!vertex.containsNeighbor(vertex.getIdentity() + 1)) {
+                            double rightEdge = ((vertex.getIdentity() % gridWidth) + 1) * cellWidth;
+                            if(point.getX() + xMovement > rightEdge) {
+                                double translation = rightEdge - (point.getX() + xMovement);
+                                player.translate(translation, 0);
+                                xMovement += translation;
+                            }
+                        }
+                    }
+                    
+                    // Create list of points to track for upward movement
+                    ArrayList<Point> upTrackPoints = new ArrayList<>();
+                    upTrackPoints.add(up);
+                    
+                    slope = (left.getY() - up.getY()) / (left.getX() - up.getX());
+                    for(int upIndex = getGridY(left.getY()); upIndex > getGridY(up.getY()); upIndex--) {
+                        double y = upIndex * cellHeight;
+                        double x = slope * (y - up.getY()) + up.getX();
+                        upTrackPoints.add(new Point(x, y));
+                    }
+                    slope = (right.getY() - up.getY()) / (right.getX() - up.getX());
+                    for(int upIndex = getGridY(right.getY()); upIndex > getGridY(up.getY()); upIndex--) {
+                        double y = upIndex * cellHeight;
+                        double x = slope * (y - up.getY()) + up.getX();
+                        upTrackPoints.add(new Point(x, y));
+                    }
+                    for(Point point: upTrackPoints) {
+                        Vertex vertex = graph.getVertex(getGridIdentity(point));
+                        if(point == up && !vertex.containsNeighbor(vertex.getIdentity() + gridWidth)) {
+                            vertex = graph.getVertex(vertex.getIdentity() + gridWidth);
+                        }
+                        if(!vertex.containsNeighbor(vertex.getIdentity() - gridWidth)) {
+                            double upEdge = Math.floor((vertex.getIdentity() / gridWidth)) * cellHeight;
+                            if(point.getY() + yMovement < upEdge) {
+                                double translation = upEdge - (point.getY() + yMovement);
+                                player.translate(0, translation);
+                                yMovement += translation;
+                            }
+                        }
+                    }
+                    
+                    // Create list of points to track for downward movement
+                    ArrayList<Point> downTrackPoints = new ArrayList<>();
+                    downTrackPoints.add(down);
+                    
+                    slope = (left.getY() - down.getY()) / (left.getX() - down.getX());
+                    for(int downIndex = getGridY(left.getY()) + 1; downIndex < getGridY(down.getY()); downIndex++) {
+                        double y = downIndex * cellHeight;
+                        double x = slope * (y - down.getY()) + down.getX();
+                        downTrackPoints.add(new Point(x, y));
+                    }
+                    slope = (right.getY() - down.getY()) / (right.getX() - down.getX());
+                    for(int downIndex = getGridY(right.getY()) + 1; downIndex < getGridY(down.getY()); downIndex++) {
+                        double y = downIndex * cellHeight;
+                        double x = slope * (y - down.getY()) + down.getX();
+                        downTrackPoints.add(new Point(x, y));
+                    }
+                    for(Point point: downTrackPoints) {
+                        Vertex vertex = graph.getVertex(getGridIdentity(point));
+                        if(point == down && !vertex.containsNeighbor(vertex.getIdentity() - gridWidth)) {
+                            vertex = graph.getVertex(vertex.getIdentity() - gridWidth);
+                        }
+                        if(!vertex.containsNeighbor(vertex.getIdentity() + gridWidth)) {
+                            double downEdge = (Math.floor(vertex.getIdentity() / gridWidth) + 1) * cellHeight;
+                            if(point.getY() + yMovement > downEdge) {
+                                double translation = downEdge - (point.getY() + yMovement);
+                                player.translate(0, translation);
+                                yMovement += translation;
+                            }
+                        }
+                    }
+
+                    // Rotate rectangle 
+                    playerRect.setRotate(getDegrees(player.getTheta()));
+
                     // Apply translations
                     playerRect.setX(player.getX());
                     playerRect.setY(player.getY());
+                    
+                    // Get center of player
+                    playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
+                    // Used for zombies to track player
+                    playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX(), playerCenter.getY()));
                     
                     // Move bullets
                     for(Weapon weapon : player.getWeapons()) {
@@ -239,7 +432,7 @@ public class ZombiesFXMLController implements Initializable {
                 });
             }
         };
-        movePlayerTimer.scheduleAtFixedRate(movePlayerTask, 0, 15);
+        movementTimer.scheduleAtFixedRate(movementTask, 0, 15);
         
         anchorPane.getChildren().add(playerRect);
     }
@@ -275,7 +468,7 @@ public class ZombiesFXMLController implements Initializable {
     
     // Cancel timers - gets called on exit in main method
     public void dispose() {
-        movePlayerTimer.cancel();
+        movementTimer.cancel();
         shootTimer.cancel();
     }
     
@@ -289,6 +482,30 @@ public class ZombiesFXMLController implements Initializable {
         scene.setOnKeyReleased((keyEvent) -> {
             setArrowValues(keyEvent.getCode(), false);
         });
+    }
+    
+    public int getGridX(double x) {
+        return (int)(x / cellWidth);
+    }
+    
+    public int getGridY(double y) {
+        return (int)(y / cellWidth);
+    }
+    
+    public int getGridIdentity(Point point) {
+        return getGridIdentity(point.getX(), point.getY());
+    }
+    
+    public int getGridIdentity(double x, double y) {
+        int value = (getGridY(y) * gridWidth) + getGridX(x);
+        
+        if(value < 0) {
+            return 0;
+        } else if (value > (gridWidth * gridHeight) - 1) {
+            return (gridWidth * gridHeight) - 1;
+        }
+        
+        return value;
     }
     
     // Build edges for a grid-shaped graph of size width and height

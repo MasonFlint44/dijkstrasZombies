@@ -90,7 +90,7 @@ public class Graph {
     private void reset() {
         for(Vertex vertex : verticies) {
             vertex.dijkstraInfo.distance = Double.POSITIVE_INFINITY;
-            vertex.dijkstraInfo.visited = false;
+            vertex.dijkstraInfo.settled = false;
         }
     }
     
@@ -100,27 +100,27 @@ public class Graph {
             return null;
         }
         
-        ArrayList<Vertex> open = new ArrayList<>();
+        ArrayList<Vertex> unsettled = new ArrayList<>();
         reset();
         
         start.dijkstraInfo.distance = 0;
         start.dijkstraInfo.previous = null;
-        open.add(start);
+        unsettled.add(start);
         
-        while(!open.isEmpty()) {
-            Vertex vertex = getMin(open);
-            vertex.dijkstraInfo.visited = true;
-            open.remove(vertex);
+        while(!unsettled.isEmpty()) {
+            Vertex vertex = getMin(unsettled);
+            vertex.dijkstraInfo.settled = true;
             if(vertex.equals(stop)) {
                 break;
             }
+            unsettled.remove(vertex);
             
             for(Vertex neighbor : vertex.getNeighbors()) {
                 double alt = vertex.dijkstraInfo.distance + neighbor.getDistance(vertex);
-                if(alt < neighbor.dijkstraInfo.distance && neighbor.dijkstraInfo.visited == false) {
+                if(neighbor.dijkstraInfo.settled == false && alt < neighbor.dijkstraInfo.distance) {
                     neighbor.dijkstraInfo.distance = alt;
                     neighbor.dijkstraInfo.previous = vertex;
-                    open.add(neighbor);
+                    unsettled.add(neighbor);
                 }
             }
         }
