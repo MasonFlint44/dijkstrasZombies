@@ -54,3 +54,4 @@ dist/
 nbdist/
 nbactions.xml
 nb-configuration.xml
+/DijkstrasZombies/nbproject/private/

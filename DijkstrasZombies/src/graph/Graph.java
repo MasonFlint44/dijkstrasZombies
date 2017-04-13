@@ -36,12 +36,19 @@ public class Graph {
     }
     
     public void removeVertex(int identifier) {
-        Vertex vertex = new Vertex(identifier);
-        if(verticies.contains(vertex)) {
+        disconnect(identifier);
+        verticies.remove(getVertex(identifier));
+    }
+    
+    // Removes all neighbors from a vertex without removing vertex from graph
+    public void disconnect(int identifier) {
+        Vertex vertex = getVertex(identifier);
+        if(vertex != null) {
             for(Vertex neighbor : vertex.getNeighbors()) {
                 neighbor.removeNeighbor(vertex);
             }
-            verticies.remove(vertex);
+            vertex.getNeighbors().clear();
+            vertex.getDistances().clear();
         }
     }
     
@@ -92,6 +99,10 @@ public class Graph {
             vertex.dijkstraInfo.distance = Double.POSITIVE_INFINITY;
             vertex.dijkstraInfo.settled = false;
         }
+    }
+    
+    public ArrayList<Vertex> dijkstras(int start, int stop) {
+        return dijkstras(getVertex(start), getVertex(stop));
     }
     
     // This is Dijkstra's algorithm modified to return a path of verticies from the start node to the stop node

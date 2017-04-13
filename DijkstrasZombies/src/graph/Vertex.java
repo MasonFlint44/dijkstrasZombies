@@ -79,6 +79,10 @@ public class Vertex {
         return neighbors;
     }
     
+    public Hashtable<Vertex, Double> getDistances() {
+        return distances;
+    }
+    
     @Override
     public String toString() {
         return "Vertex: " + identifier;
