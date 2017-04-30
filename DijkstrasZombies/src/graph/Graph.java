@@ -6,6 +6,8 @@
 package graph;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Hashtable;
 
 /**
  *
@@ -147,14 +149,6 @@ public class Graph {
         return vertices;
     }
     
-    // Helper method for Dijkstra's
-    private void reset() {
-        for(Vertex vertex : vertices) {
-            vertex.dijkstraInfo.distance = Double.POSITIVE_INFINITY;
-            vertex.dijkstraInfo.settled = false;
-        }
-    }
-    
     public ArrayList<Vertex> dijkstras(int start, int stop) {
         return dijkstras(getVertex(start), getVertex(stop));
     }
@@ -165,26 +159,28 @@ public class Graph {
             return null;
         }
         
+        boolean settled[] = new boolean[getVertexCount()];
+        double distance[] = new double[getVertexCount()];
+        Arrays.fill(distance, Double.POSITIVE_INFINITY);
+        Hashtable<Vertex, Vertex> previous = new Hashtable<>();
         ArrayList<Vertex> unsettled = new ArrayList<>();
-        reset();
         
-        start.dijkstraInfo.distance = 0;
-        start.dijkstraInfo.previous = null;
+        distance[start.getIdentity()] = 0;
         unsettled.add(start);
         
         while(!unsettled.isEmpty()) {
-            Vertex vertex = getMin(unsettled);
-            vertex.dijkstraInfo.settled = true;
+            Vertex vertex = getMinDistance(unsettled, distance);
+            settled[vertex.getIdentity()] = true;
             if(vertex.equals(stop)) {
                 break;
             }
             unsettled.remove(vertex);
             
             for(Vertex neighbor : vertex.getNeighbors()) {
-                double alt = vertex.dijkstraInfo.distance + neighbor.getDistance(vertex);
-                if(neighbor.dijkstraInfo.settled == false && alt < neighbor.dijkstraInfo.distance) {
-                    neighbor.dijkstraInfo.distance = alt;
-                    neighbor.dijkstraInfo.previous = vertex;
+                double alt = distance[vertex.getIdentity()] + neighbor.getDistance(vertex);
+                if(settled[neighbor.getIdentity()] == false && alt < distance[neighbor.getIdentity()]) {
+                    distance[neighbor.getIdentity()] = alt;
+                    previous.put(neighbor, vertex);
                     unsettled.add(neighbor);
                 }
             }
@@ -194,15 +190,15 @@ public class Graph {
         Vertex prev = stop;
         while(prev != null) {
             path.add(0, prev);
-            prev = prev.dijkstraInfo.previous;
+            prev = previous.get(prev);
         }
         return path;
     }
     
-    private Vertex getMin(ArrayList<Vertex> vertices) {
+    private Vertex getMinDistance(ArrayList<Vertex> vertices, double[] distance) {
         Vertex min = vertices.get(0);
         for(Vertex vertex : vertices) {
-            if(vertex.dijkstraInfo.distance < min.dijkstraInfo.distance) {
+            if(distance[vertex.getIdentity()] < distance[min.getIdentity()]) {
                 min = vertex;
             }
         }

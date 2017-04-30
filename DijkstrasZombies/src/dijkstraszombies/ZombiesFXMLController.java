@@ -13,6 +13,9 @@ import java.util.Hashtable;
 import java.util.ResourceBundle;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.CountDownLatch;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -76,14 +79,21 @@ public class ZombiesFXMLController implements Initializable {
     
     // Zombie values
     private int zombieSpawnCounter = 0;
-    private int zombieSpawnRate = 60;
+    private final int zombieSpawnRate = 180;
     private int zombieCount = 0;
-    private int zombieMaxCount = 2;
+    private final int zombieMaxCount = 20;
+    
+    private final double zombieSpeed = .5;
+    private final int zombieHealth = 50;
     
     private final ArrayList<Character> zombieList = new ArrayList<>();
     private final ArrayList<Rectangle> zombieRectangleList = new ArrayList<>();
     
-    private final ArrayList<Rectangle> dijkstraPath = new ArrayList<>();
+    private final Timer dijkstraTimer = new Timer("DijkstraTimer");
+    private final Hashtable<Character, ArrayList<Vertex>> dijkstraPaths = new Hashtable<>();
+    
+//    // Draw dijkstra path on screen
+//    private final ArrayList<Rectangle> dijkstraPath = new ArrayList<>();
     
     @FXML
     private AnchorPane anchorPane;
@@ -189,6 +199,27 @@ public class ZombiesFXMLController implements Initializable {
             click = false;
         });
         
+        // Dijkstra timer
+        TimerTask dijkstraTask = new TimerTask() {
+            private boolean ready = true;
+            
+            @Override
+            public void run() {
+                if(ready) {
+                    ready = false;
+                    
+                    for(int i = 0; i < zombieList.size(); i++) {
+                        Character zombie = zombieList.get(i);
+                        ArrayList<Vertex> zombiePath = graph.dijkstras(getGridIdentity(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), playerVertex.getIdentity());
+                        dijkstraPaths.put(zombie, zombiePath);
+                    }
+                    
+                    ready = true;
+                }
+            }
+        };
+        dijkstraTimer.scheduleAtFixedRate(dijkstraTask, 0, 15);
+        
         // Move player
         TimerTask movementTask = new TimerTask() {
             @Override
@@ -196,51 +227,56 @@ public class ZombiesFXMLController implements Initializable {
                 // Calculate degrees of rotation
                 player.setTheta(Math.atan2(mouseY - (player.getY() + (playerHeight / 2)), mouseX - (player.getX() + (playerWidth / 2))));
                 
-                Platform.runLater(() -> {
-                    // Fire bullets
-                    if(fireCounter++ >= player.getWeapon().getFireRate()) {
-                        fireCounter = 0;
-                        
-                        if(click || clickCount > 0) {
-                            clickCount = 0;
+                // Fire bullets
+                if(fireCounter++ >= player.getWeapon().getFireRate()) {
+                    fireCounter = 0;
 
-                            Bullet bullet = player.fireWeapon();
-                            bullet.setX((player.getX() + centerWidth) + (offset * Math.cos(player.getTheta())));
-                            bullet.setY((player.getY() + centerHeight) + (offset * Math.sin(player.getTheta())));
+                    if(click || clickCount > 0) {
+                        clickCount = 0;
 
+                        Bullet bullet = player.fireWeapon();
+                        bullet.setX((player.getX() + centerWidth) + (offset * Math.cos(player.getTheta())));
+                        bullet.setY((player.getY() + centerHeight) + (offset * Math.sin(player.getTheta())));
+
+                        Platform.runLater(() -> {
                             Rectangle bulletRect = new Rectangle(bullet.getX(), bullet.getY() , bulletWidth, bulletHeight);
                             bulletRect.setFill(bulletColor);
                             bulletRect.setRotate(getDegrees(bullet.getTheta()));
 
                             bullets.put(bullet, bulletRect);
-
                             anchorPane.getChildren().add(bulletRect);
-                        }
-                    }                  
-                   
-                    if (zombieSpawnCounter++  == zombieSpawnRate && zombieCount < zombieMaxCount) {
-                        zombieSpawnCounter = 0;
-                        Character zombieInstance = new Character();
-                        zombieInstance.setHealth(1000);
-                        zombieInstance.setSpeed(1.0);
-                        zombieInstance.setX( Math.random() * (anchorPane.getPrefWidth() - playerWidth)  );
-                        zombieInstance.setY( Math.random() * (anchorPane.getPrefHeight() - playerHeight)  );
-                     //   zombieInstance.setTheta( (Math.random() *  Math.PI ));
+                        });
+                    }
+                }
+                
+                // Spawn zombies
+                if (zombieSpawnCounter++  >= zombieSpawnRate && zombieCount < zombieMaxCount) {
+                    zombieSpawnCounter = 0;
+                    zombieCount += 1;
+
+                    Character zombieInstance = new Character();
+                    zombieInstance.setHealth(zombieHealth);
+                    zombieInstance.setSpeed(zombieSpeed);
+                    zombieInstance.setX(Math.random() * (anchorPane.getPrefWidth() - playerWidth));
+                    zombieInstance.setY(Math.random() * (anchorPane.getPrefHeight() - playerHeight));
+
+                    Platform.runLater(() -> {
                         Rectangle zombieRectangle = new Rectangle(zombieInstance.getX(), zombieInstance.getY(), playerWidth, playerHeight);
                         zombieRectangle.setFill(Color.GREEN);
-                        zombieCount += 1;
-                       // zombieRectangle.setRotate(getDegrees(zombieInstance.getTheta()));
+                        anchorPane.getChildren().add(zombieRectangle);
+
                         zombieList.add(zombieInstance);
                         zombieRectangleList.add(zombieRectangle);
-                        anchorPane.getChildren().add(zombieRectangle);
-                    }
+                    });
+                }
                 
-                    // Get center of player
-                    playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
-                    
+                // Get center of player
+                playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
+                
+                Platform.runLater(() -> {
                     double xMovement = 0;
                     double yMovement = 0;
-                    
+
                     // Move player
                     if(left) {
                         double distance = player.getSpeed();
@@ -276,19 +312,19 @@ public class ZombiesFXMLController implements Initializable {
                     }
                     
                     // Get bounds of player
-                    Bounds rectBounds = playerRect.getBoundsInParent();
-                    
+                    Bounds playerBounds = playerRect.getBoundsInParent();
+
                     // Get y coordinates of corners
-                    Double rightY = Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2) - Math.pow(playerCenter.getX() - rectBounds.getMinX(), 2));
+                    Double rightY = Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2) - Math.pow(playerCenter.getX() - playerBounds.getMinX(), 2));
                     Double leftY = playerCenter.getY() - rightY;
                     rightY += playerCenter.getY();
                     if(rightY.isNaN()) {
                         leftY = playerCenter.getY();
                         rightY = playerCenter.getY();
                     }
-                    
+
                     // Get x coordinates of corners
-                    Double upX = Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2) - Math.pow(playerCenter.getY() - rectBounds.getMinY(), 2));
+                    Double upX = Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2) - Math.pow(playerCenter.getY() - playerBounds.getMinY(), 2));
                     Double downX = playerCenter.getX() - upX;
                     upX += playerCenter.getX();
                     if(upX.isNaN()) {
@@ -325,10 +361,10 @@ public class ZombiesFXMLController implements Initializable {
                     }
                     
                     // Create points of each corner of rectangle
-                    Point left = new Point(rectBounds.getMinX(), leftY);
-                    Point right = new Point(rectBounds.getMaxX(), rightY);
-                    Point up = new Point(upX, rectBounds.getMinY());
-                    Point down = new Point(downX, rectBounds.getMaxY());
+                    Point left = new Point(playerBounds.getMinX(), leftY);
+                    Point right = new Point(playerBounds.getMaxX(), rightY);
+                    Point up = new Point(upX, playerBounds.getMinY());
+                    Point down = new Point(downX, playerBounds.getMaxY());
                     
                     // Create list of points to track for leftward movement
                     ArrayList<Point> leftTrackPoints = new ArrayList<>();
@@ -402,24 +438,6 @@ public class ZombiesFXMLController implements Initializable {
                         downTrackPoints.add(new Point(x, y));
                     }
                     
-                    // Used for zombies to track player
-                    playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX() + xMovement, playerCenter.getY() + yMovement));
-                    
-                    // Example visualization of dijkstra's algorithm
-                    for(Rectangle rect : dijkstraPath) {
-                        gridPane.getChildren().remove(rect);
-                    }
-                    dijkstraPath.clear();
-                    for(Vertex vertex : graph.dijkstras(graph.getVertex(0), playerVertex)) {
-                        int index = vertex.getIdentity();
-                        
-                        Rectangle rect = new Rectangle(5, 5, Color.BLUE);
-                        dijkstraPath.add(rect);
-                        GridPane.setColumnIndex(rect, index % gridWidth);
-                        GridPane.setRowIndex(rect, index / gridWidth);
-                        gridPane.getChildren().add(rect);
-                    }
-                    
                     // Add tracking points to one list
                     ArrayList<Point> edgePoints = new ArrayList<>();
                     edgePoints.addAll(leftTrackPoints);
@@ -428,15 +446,15 @@ public class ZombiesFXMLController implements Initializable {
                     edgePoints.addAll(downTrackPoints);
                     
                     // Keep player inside bounds of anchorPane
-                    if(rectBounds.getMinX() + xMovement < 0) {
-                        player.translate(0 - (rectBounds.getMinX() + xMovement), 0);
-                    } else if(rectBounds.getMaxX() + xMovement > anchorPane.getWidth()) {
-                        player.translate(anchorPane.getWidth() - (rectBounds.getMaxX() + xMovement), 0);
+                    if(playerBounds.getMinX() + xMovement < 0) {
+                        player.translate(0 - (playerBounds.getMinX() + xMovement), 0);
+                    } else if(playerBounds.getMaxX() + xMovement > anchorPane.getWidth()) {
+                        player.translate(anchorPane.getWidth() - (playerBounds.getMaxX() + xMovement), 0);
                     }
-                    if(rectBounds.getMinY() + yMovement < 0) {
-                        player.translate(0, 0 - (rectBounds.getMinY() + yMovement));
-                    } else if(rectBounds.getMaxY() + yMovement > anchorPane.getHeight()) {
-                        player.translate(0, anchorPane.getHeight() - (rectBounds.getMaxY() + yMovement));
+                    if(playerBounds.getMinY() + yMovement < 0) {
+                        player.translate(0, 0 - (playerBounds.getMinY() + yMovement));
+                    } else if(playerBounds.getMaxY() + yMovement > anchorPane.getHeight()) {
+                        player.translate(0, anchorPane.getHeight() - (playerBounds.getMaxY() + yMovement));
                     }
                     
                     // Check player for wall collisions
@@ -476,110 +494,88 @@ public class ZombiesFXMLController implements Initializable {
                     playerRect.setX(player.getX());
                     playerRect.setY(player.getY());
                     
+                    // Used for zombies to track player
+                    playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX() + xMovement, playerCenter.getY() + yMovement));
+                    
                     // Move bullets
                     for(Weapon weapon : player.getWeapons()) {
                         for(int i = weapon.getBullets().size() - 1; i >= 0; i--) {
                             Bullet bullet = weapon.getBullets().get(i);
                             bullet.move();
                             
-                            Rectangle bulletRect = bullets.get(bullet);
-                            bulletRect.setX(bullet.getX());
-                            bulletRect.setY(bullet.getY());
-                            
-                            Bounds bulletBounds = bulletRect.getBoundsInParent();
-                            if(bulletBounds.getMaxX() < 0) {
-                                anchorPane.getChildren().remove(bulletRect);
-                                bullets.remove(bullet.destroy());
-                                continue;
-                            } else if(bulletBounds.getMinX() > anchorPane.getWidth()) {
-                                anchorPane.getChildren().remove(bulletRect);
-                                bullets.remove(bullet.destroy());
-                                continue;
-                            }
-                            if(bulletBounds.getMaxY() < 0) {
-                                anchorPane.getChildren().remove(bulletRect);
-                                bullets.remove(bullet.destroy());
-                            } else if(bulletBounds.getMinY() > anchorPane.getHeight()) {
-                                anchorPane.getChildren().remove(bulletRect);
-                                bullets.remove(bullet.destroy());
-                            }
-                        }
-                        
-                        for(Rectangle rect : dijkstraPath) {
-                            gridPane.getChildren().remove(rect);
-                        }
-                        dijkstraPath.clear();
-                     
-                        for (Character eachZombie : zombieList) {
-                    
-                            
-                                ArrayList<Vertex> zombiePath = graph.dijkstras(getGridIdentity(eachZombie.getX() + playerWidth / 2, eachZombie.getY() + playerHeight / 2), playerVertex.getIdentity());
-                                
-                                if(zombiePath.size() > 1){
-                                
-                                    double yDifference = (int)(zombiePath.get(1).getIdentity() / gridWidth) * cellHeight  -  eachZombie.getY();
-                                    double xDifference =  zombiePath.get(1).getIdentity() % gridWidth * cellWidth - eachZombie.getX();
-                                    
-                                    
-                                    if ( Double.isInfinite(xDifference) || Double.isNaN(xDifference))
-                                            {
-                                                System.out.println("this is x " + xDifference);
-                                            
-                                            }
-                                    
-                                    if(Double.isInfinite(yDifference) || Double.isNaN(yDifference))
-                                    {
-                                                            System.out.println("this is y " + yDifference);   
-                                    }
-                                    
-                                //     eachZombie.translate(zombiePath.get(1).getIdentity() % gridWidth * cellWidth - eachZombie.getX(), (int)(zombiePath.get(1).getIdentity() / gridWidth) * cellHeight - eachZombie.getY());
-                                 
-                                eachZombie.setTheta(Math.atan2( yDifference ,  xDifference));
-                            //    System.out.println("theta " + eachZombie.getTheta());
-                                
-                                double yTranslate = eachZombie.getSpeed() * Math.sin(eachZombie.getTheta());
-                                double xTranslate = eachZombie.getSpeed() * Math.cos(eachZombie.getTheta());
-                                        
-                                eachZombie.translate( xTranslate,yTranslate);
-                                
-                                             if ( Double.isInfinite(yTranslate) || Double.isNaN(yTranslate) || yTranslate == 0.0)
-                                            {
-                                                System.out.println("this is x " + yTranslate);
-                                            
-                                            }
-                                    
-                                    if(Double.isInfinite(xTranslate) || Double.isNaN(xTranslate) || xTranslate == 0.0)
-                                    {
-                                                            System.out.println("this is y " + xTranslate);   
-                                    }
-                                
-                                
-                                
-                                for(Vertex vertex : zombiePath) {
-                                    int index = vertex.getIdentity();
-                                    
-                                    Rectangle rect = new Rectangle(5, 5, Color.BLUE);
-                                    dijkstraPath.add(rect);
-                                    GridPane.setColumnIndex(rect, index % gridWidth);
-                                    GridPane.setRowIndex(rect, index / gridWidth);
-                                    gridPane.getChildren().add(rect);
-                                }
-                                  
-                                  Platform.runLater(() -> {
-                                   Rectangle zombieMove = zombieRectangleList.get(zombieList.indexOf(eachZombie));
-                                   zombieMove.setX(eachZombie.getX());
-                                   zombieMove.setY(eachZombie.getY());
-                                   zombieMove.setRotate(getDegrees(eachZombie.getTheta())); 
-                                  });
+                            try {
+                               Rectangle bulletRect = bullets.get(bullet);
+                                bulletRect.setX(bullet.getX());
+                                bulletRect.setY(bullet.getY());
 
-                   
+                                Bounds bulletBounds = bulletRect.getBoundsInParent();
+                                if(bulletBounds.getMaxX() < 0) {
+                                    anchorPane.getChildren().remove(bulletRect);
+                                    bullets.remove(bullet.destroy());
+                                    continue;
+                                } else if(bulletBounds.getMinX() > anchorPane.getWidth()) {
+                                    anchorPane.getChildren().remove(bulletRect);
+                                    bullets.remove(bullet.destroy());
+                                    continue;
+                                }
+                                if(bulletBounds.getMaxY() < 0) {
+                                    anchorPane.getChildren().remove(bulletRect);
+                                    bullets.remove(bullet.destroy());
+                                } else if(bulletBounds.getMinY() > anchorPane.getHeight()) {
+                                    anchorPane.getChildren().remove(bulletRect);
+                                    bullets.remove(bullet.destroy());
+                                }
+                            } catch(NullPointerException ex) {
+                                // Do nothing
+                            }
                         }
-                        
-                        }
-                        
-                        
-                    }
+                    }  
                 });
+                
+//                Platform.runLater(() -> {
+//                    // Clear dijkstra path
+//                    for(Rectangle rect : dijkstraPath) {
+//                        gridPane.getChildren().remove(rect);
+//                    }
+//                    dijkstraPath.clear();
+//                });
+                
+                for(int i = 0; i < zombieList.size(); i++) {
+                    Character zombie = zombieList.get(i);
+                    
+                    ArrayList<Vertex> zombiePath = dijkstraPaths.get(zombie);
+                    if(zombiePath == null) {
+                        continue;
+                    }
+
+                    if(zombiePath.size() > 1){
+                        double yDifference = (((int)(zombiePath.get(1).getIdentity() / gridWidth) * cellHeight) + cellHeight / 2) - (zombie.getY() + (playerHeight / 2));
+                        double xDifference = ((zombiePath.get(1).getIdentity() % gridWidth * cellWidth) + cellWidth / 2) - (zombie.getX() + (playerWidth / 2)) ;
+
+                        zombie.setTheta(Math.atan2( yDifference , xDifference));
+                        zombie.translate(zombie.getSpeed() * Math.cos(zombie.getTheta()), zombie.getSpeed() * Math.sin(zombie.getTheta()));
+
+//                        // Draw dijkstra path
+//                        for(Vertex vertex : zombiePath) {
+//                            int index = vertex.getIdentity();
+//
+//                            Platform.runLater(() -> {
+//                                Rectangle rect = new Rectangle(5, 5, Color.BLUE);
+//                                dijkstraPath.add(rect);
+//                                GridPane.setColumnIndex(rect, index % gridWidth);
+//                                GridPane.setRowIndex(rect, index / gridWidth);
+//                                gridPane.getChildren().add(rect);
+//                            });
+//                        }
+
+                        Platform.runLater(() -> {
+                            Rectangle zombieRect = zombieRectangleList.get(zombieList.indexOf(zombie));
+                            zombieRect.setX(zombie.getX());
+                            zombieRect.setY(zombie.getY());
+                            zombieRect.setRotate(getDegrees(zombie.getTheta())); 
+                        });
+                    }
+                }
             }
         };
         movementTimer.scheduleAtFixedRate(movementTask, 0, 15);
@@ -619,6 +615,7 @@ public class ZombiesFXMLController implements Initializable {
     // Cancel timers - gets called on exit in main method
     public void dispose() {
         movementTimer.cancel();
+        dijkstraTimer.cancel();
     }
     
     // Add listeners to the scene

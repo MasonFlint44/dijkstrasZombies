@@ -19,7 +19,6 @@ public class Vertex {
     private final Hashtable<Vertex, Double> distances = new Hashtable<>();
     // Each vertex in a graph will have a unique identifier
     private final Integer identifier;
-    protected DijkstraInfo dijkstraInfo = new DijkstraInfo();
     
     public Vertex(int identifier) {
         this.identifier = identifier;
@@ -117,10 +116,4 @@ public class Vertex {
     public int hashCode() {
         return identifier.hashCode();
     }
-    
-    public class DijkstraInfo {
-        public boolean settled;
-        public double distance = 0;
-        public Vertex previous;
-    }  
 }
