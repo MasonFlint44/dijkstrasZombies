@@ -55,7 +55,7 @@ public class ZombiesFXMLController implements Initializable {
     private final Timer shootTimer = new Timer("ShootTimer");
     
     private Rectangle playerRect;
-    private final Player player = new Player();
+    private final Character player = new Character();
     private final Hashtable<Bullet, Rectangle> bullets = new Hashtable<>();
     private Point playerCenter;
     private Vertex playerVertex;
@@ -66,7 +66,16 @@ public class ZombiesFXMLController implements Initializable {
     private double cellHeight;
     private final Graph graph;
     
-    private final ArrayList<Rectangle> dijkstraPath = new ArrayList<>();
+    private int zombieSpawnCounter = 0;
+    private int zombieSpawnRate = 60;
+    private int zombieCount = 0;
+    private int zombieMaxCount = 2;
+    
+    private final ArrayList<Character> zombieList = new ArrayList<>();
+    private final ArrayList<Rectangle> zombieRectangleList = new ArrayList<>();
+    
+    private final ArrayList<Rectangle> dPath = new ArrayList<>();
+    
     
     @FXML
     private AnchorPane anchorPane;
@@ -84,24 +93,15 @@ public class ZombiesFXMLController implements Initializable {
     
     @Override
     public void initialize(URL url, ResourceBundle rb) {
-        for(int i  = 1030; i < 8030; i += gridWidth) {
-            graph.disconnect(i);
-            
-            Rectangle rect = new Rectangle(5, 5, Color.BLACK);
-            GridPane.setColumnIndex(rect, i % gridWidth);
-            GridPane.setRowIndex(rect, i / gridWidth);
-            gridPane.getChildren().add(rect);
-        }
-        
-        for(int i = 1045; i < 1090; i++) {
-            graph.disconnect(i);
-            
-            Rectangle rect = new Rectangle(5, 5, Color.BLACK);
-            GridPane.setColumnIndex(rect, i % gridWidth);
-            GridPane.setRowIndex(rect, i / gridWidth);
-            gridPane.getChildren().add(rect);
-        }
-        
+//        // Example visualization of dijkstra's algorithm
+//        for(Vertex vertex : graph.dijkstras(graph.getVertex(568), graph.getVertex(7))) {
+//            int index = vertex.getIdentity();
+//            Rectangle rect = new Rectangle(5, 5, Color.RED);
+//            GridPane.setColumnIndex(rect, index % gridWidth);
+//            GridPane.setRowIndex(rect, index / gridWidth);
+//            gridPane.getChildren().add(rect);
+//        }
+
         cellWidth = gridPane.getPrefWidth() / gridWidth;
         cellHeight = gridPane.getPrefHeight() / gridHeight;
         
@@ -172,28 +172,35 @@ public class ZombiesFXMLController implements Initializable {
                 player.setTheta(Math.atan2(mouseY - (player.getY() + (playerHeight / 2)), mouseX - (player.getX() + (playerWidth / 2))));
                 
                 Platform.runLater(() -> {
+                    double xMovement = 0;
+                    double yMovement = 0;
+                    
+
                     // Get center of player
                     playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
                     // Used for zombies to track player
                     playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX(), playerCenter.getY()));
-                    
-//                  Example visualization of dijkstra's algorithm
-                    for(Rectangle rect : dijkstraPath) {
-                        gridPane.getChildren().remove(rect);
+                   
+                    if (zombieSpawnCounter++  == zombieSpawnRate && zombieCount != zombieMaxCount) {
+                        zombieSpawnCounter = 0;
+                        Character zombieInstance = new Character();
+                        zombieInstance.setHealth(1000);
+                        zombieInstance.setSpeed(1.0);
+                        zombieInstance.setX( Math.random() * (anchorPane.getPrefWidth() - playerWidth)  );
+                        zombieInstance.setY( Math.random() * (anchorPane.getPrefHeight() - playerHeight)  );
+                     //   zombieInstance.setTheta( (Math.random() *  Math.PI ));
+                        Rectangle zombieRectangle = new Rectangle(zombieInstance.getX(), zombieInstance.getY(), playerWidth, playerHeight);
+                        zombieRectangle.setFill(Color.GREEN);
+                        zombieCount += 1;
+                       // zombieRectangle.setRotate(getDegrees(zombieInstance.getTheta()));
+                        zombieList.add(zombieInstance);
+                        zombieRectangleList.add(zombieRectangle);
+                        anchorPane.getChildren().add(zombieRectangle);
+
                     }
-                    dijkstraPath.clear();
-                    for(Vertex vertex : graph.dijkstras(graph.getVertex(0), playerVertex)) {
-                        int index = vertex.getIdentity();
-                        
-                        Rectangle rect = new Rectangle(5, 5, Color.BLUE);
-                        dijkstraPath.add(rect);
-                        GridPane.setColumnIndex(rect, index % gridWidth);
-                        GridPane.setRowIndex(rect, index / gridWidth);
-                        gridPane.getChildren().add(rect);
-                    }
+                
+
                     
-                    double xMovement = 0;
-                    double yMovement = 0;
                     
                     // Move player
                     if(left) {
@@ -229,8 +236,19 @@ public class ZombiesFXMLController implements Initializable {
                         yMovement += distance;
                     }
                     
-                    // Get bounds of player
+                    // If out of bounds, move back in bounds
                     Bounds rectBounds = playerRect.getBoundsInParent();
+                    
+//                    if(rectBounds.getMinX() + xMovement < 0) {
+//                        player.translate(0 - (rectBounds.getMinX() + xMovement), 0);
+//                    } else if(rectBounds.getMaxX() + xMovement > anchorPane.getWidth()) {
+//                        player.translate(anchorPane.getWidth() - (rectBounds.getMaxX() + xMovement), 0);
+//                    }
+//                    if(rectBounds.getMinY() + yMovement < 0) {
+//                        player.translate(0, 0 - (rectBounds.getMinY() + yMovement));
+//                    } else if(rectBounds.getMaxY() + yMovement > anchorPane.getHeight()) {
+//                        player.translate(0, anchorPane.getHeight() - (rectBounds.getMaxY() + yMovement));
+//                    }
                     
                     // Get y coordinates of corners
                     Double rightY = Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2) - Math.pow(playerCenter.getX() - rectBounds.getMinX(), 2));
@@ -288,133 +306,134 @@ public class ZombiesFXMLController implements Initializable {
                     ArrayList<Point> leftTrackPoints = new ArrayList<>();
                     leftTrackPoints.add(left);
                     
-                    // Create list of points to track for upward movement
-                    ArrayList<Point> upTrackPoints = new ArrayList<>();
-                    upTrackPoints.add(up);
-                    
-                    // Create list of points to track for downward movement
-                    ArrayList<Point> downTrackPoints = new ArrayList<>();
-                    downTrackPoints.add(down);
-                    
-                    // Create list of points to track for rightward movement
-                    ArrayList<Point> rightTrackPoints = new ArrayList<>();
-                    rightTrackPoints.add(right);
-                    
-                    // Calculate points for leftward movement
                     double slope = (up.getY() - left.getY()) / (up.getX() - left.getX());
                     for(int leftIndex = getGridX(left.getX()) + 1; leftIndex <= getGridX(up.getX()); leftIndex++) {
                         double x = leftIndex * cellWidth;
                         double y = slope * (x - left.getX()) + left.getY();
-                        Point point = new Point(x, y);
-                        leftTrackPoints.add(point);
+                        leftTrackPoints.add(new Point(x, y));
                     }
                     slope = (down.getY() - left.getY()) / (down.getX() - left.getX());
                     for(int leftIndex = getGridX(left.getX()) + 1; leftIndex <= getGridX(down.getX()); leftIndex++) {
                         double x = leftIndex * cellWidth;
                         double y = slope * (x - left.getX()) + left.getY();
-                        Point point = new Point(x, y);
-                        leftTrackPoints.add(point);
+                        leftTrackPoints.add(new Point(x, y));
+                    }
+                    for(Point point: leftTrackPoints) {
+                        Vertex vertex = graph.getVertex(getGridIdentity(point));
+                        if(point == left && !vertex.containsNeighbor(vertex.getIdentity() + 1)) {
+                            vertex = graph.getVertex(vertex.getIdentity() + 1);
+                        }
+                        if(!vertex.containsNeighbor(vertex.getIdentity() - 1)) {
+                            double leftEdge = (vertex.getIdentity() % gridWidth) * cellWidth;
+                            if(point.getX() + xMovement < leftEdge) {
+                                double translation = leftEdge - (point.getX() + xMovement);
+                                player.translate(translation, 0);
+                                xMovement += translation;
+                            }
+                        }
                     }
                     
-                    // Calculate points for rightward movement
+                    // Create list of points to track for rightward movement
+                    ArrayList<Point> rightTrackPoints = new ArrayList<>();
+                    rightTrackPoints.add(right);
+                    
                     slope = (up.getY() - right.getY()) / (up.getX() - right.getX());
                     for(int rightIndex = getGridX(right.getX()) - 1; rightIndex >= getGridX(up.getX()); rightIndex--) {
                         double x = (rightIndex + 1) * cellWidth;
                         double y = slope * (x - right.getX()) + right.getY();
-                        Point point = new Point(x, y);
-                        rightTrackPoints.add(point);
+                        rightTrackPoints.add(new Point(x, y));
                     }
                     slope = (down.getY() - right.getY()) / (down.getX() - right.getX());
                     for(int rightIndex = getGridX(right.getX()) - 1; rightIndex >= getGridX(down.getX()); rightIndex--) {
                         double x = (rightIndex + 1) * cellWidth;
                         double y = slope * (x - right.getX()) + right.getY();
-                        Point point = new Point(x, y);
-                        rightTrackPoints.add(point);
+                        rightTrackPoints.add(new Point(x, y));
                     }
-
-                    // Calculate points for upward movement
-                    slope = (left.getY() - up.getY()) / (left.getX() - up.getX());
-                    for(int upIndex = getGridY(left.getY()); upIndex >= getGridY(up.getY()) + 1; upIndex--) {
-                        double y = upIndex * cellHeight;
-                        double x = (y - up.getY()) / slope + up.getX();
-                        upTrackPoints.add(new Point(x, y));
-                    }
-                    slope = (right.getY() - up.getY()) / (right.getX() - up.getX());
-                    for(int upIndex = getGridY(right.getY()); upIndex >= getGridY(up.getY()) + 1; upIndex--) {
-                        double y = upIndex * cellHeight;
-                        double x = (y - up.getY()) / slope + up.getX();
-                        upTrackPoints.add(new Point(x, y));
-                    }
-
-                    // Calculate points for downward movement
-                    slope = (left.getY() - down.getY()) / (left.getX() - down.getX());
-                    for(int downIndex = getGridY(left.getY()) + 1; downIndex <= getGridY(down.getY()); downIndex++) {
-                        double y = downIndex * cellHeight;
-                        double x = (y - down.getY()) / slope + down.getX();
-                        downTrackPoints.add(new Point(x, y));
-                    }
-                    slope = (right.getY() - down.getY()) / (right.getX() - down.getX());
-                    for(int downIndex = getGridY(right.getY()) + 1; downIndex <= getGridY(down.getY()); downIndex++) {
-                        double y = downIndex * cellHeight;
-                        double x = (y - down.getY()) / slope + down.getX();
-                        downTrackPoints.add(new Point(x, y));
-                    }
-                    
-                    // Add tracking points to one list
-                    ArrayList<Point> edgePoints = new ArrayList<>();
-                    edgePoints.addAll(leftTrackPoints);
-                    edgePoints.addAll(rightTrackPoints);
-                    edgePoints.addAll(upTrackPoints);
-                    edgePoints.addAll(downTrackPoints);
-                    
-                    // Keep player inside bounds of anchorPane
-                    if(rectBounds.getMinX() + xMovement < 0) {
-                        player.translate(0 - (rectBounds.getMinX() + xMovement), 0);
-                    } else if(rectBounds.getMaxX() + xMovement > anchorPane.getWidth()) {
-                        player.translate(anchorPane.getWidth() - (rectBounds.getMaxX() + xMovement), 0);
-                    }
-                    if(rectBounds.getMinY() + yMovement < 0) {
-                        player.translate(0, 0 - (rectBounds.getMinY() + yMovement));
-                    } else if(rectBounds.getMaxY() + yMovement > anchorPane.getHeight()) {
-                        player.translate(0, anchorPane.getHeight() - (rectBounds.getMaxY() + yMovement));
-                    }
-                    
-                    // Check player for wall collisions
-                    for(Point point: edgePoints) {
-                        Point translatedPoint = new Point(point.getX() + xMovement, point.getY() + yMovement);
-                        Vertex vertex = graph.getVertex(getGridIdentity(translatedPoint));
-                        if(vertex.getNeighborCount() == 0) {
-                            Point vertexCenter = new Point(((vertex.getIdentity() % gridWidth) * cellWidth) + (cellWidth / 2), ((vertex.getIdentity() / gridWidth) * cellHeight) + (cellHeight / 2));
-                            double edge;
-                            double translation;
-                            if(Math.abs(vertexCenter.getX() - playerCenter.getX()) > Math.abs(vertexCenter.getY() - playerCenter.getY())) {
-                                if(playerCenter.getX() < vertexCenter.getX()) {
-                                    edge = (vertex.getIdentity() % gridWidth) * cellWidth;
-                                } else {
-                                    edge = ((vertex.getIdentity() % gridWidth) + 1) * cellWidth;
-                                }
-                                translation = edge - translatedPoint.getX();
-                                xMovement += translation;
+                    for(Point point: rightTrackPoints) {
+                        Vertex vertex = graph.getVertex(getGridIdentity(point));
+                        if(point == right && !vertex.containsNeighbor(vertex.getIdentity() - 1)) {
+                            vertex = graph.getVertex(vertex.getIdentity() - 1);
+                        }
+                        if(!vertex.containsNeighbor(vertex.getIdentity() + 1)) {
+                            double rightEdge = ((vertex.getIdentity() % gridWidth) + 1) * cellWidth;
+                            if(point.getX() + xMovement > rightEdge) {
+                                double translation = rightEdge - (point.getX() + xMovement);
                                 player.translate(translation, 0);
-                            } else {
-                                if(playerCenter.getY() < vertexCenter.getY()) {
-                                    edge = (vertex.getIdentity() / gridWidth) * cellHeight;
-                                } else {
-                                    edge = ((vertex.getIdentity() / gridWidth) + 1) * cellHeight;
-                                }
-                                translation = edge - translatedPoint.getY();
-                                yMovement += translation;
-                                player.translate(0, translation);
+                                xMovement += translation;
                             }
                         }
                     }
                     
+                    // Create list of points to track for upward movement
+                    ArrayList<Point> upTrackPoints = new ArrayList<>();
+                    upTrackPoints.add(up);
+                    
+                    slope = (left.getY() - up.getY()) / (left.getX() - up.getX());
+                    for(int upIndex = getGridY(left.getY()); upIndex > getGridY(up.getY()); upIndex--) {
+                        double y = upIndex * cellHeight;
+                        double x = slope * (y - up.getY()) + up.getX();
+                        upTrackPoints.add(new Point(x, y));
+                    }
+                    slope = (right.getY() - up.getY()) / (right.getX() - up.getX());
+                    for(int upIndex = getGridY(right.getY()); upIndex > getGridY(up.getY()); upIndex--) {
+                        double y = upIndex * cellHeight;
+                        double x = slope * (y - up.getY()) + up.getX();
+                        upTrackPoints.add(new Point(x, y));
+                    }
+                    for(Point point: upTrackPoints) {
+                        Vertex vertex = graph.getVertex(getGridIdentity(point));
+                        if(point == up && !vertex.containsNeighbor(vertex.getIdentity() + gridWidth)) {
+                            vertex = graph.getVertex(vertex.getIdentity() + gridWidth);
+                        }
+                        if(!vertex.containsNeighbor(vertex.getIdentity() - gridWidth)) {
+                            double upEdge = Math.floor((vertex.getIdentity() / gridWidth)) * cellHeight;
+                            if(point.getY() + yMovement < upEdge) {
+                                double translation = upEdge - (point.getY() + yMovement);
+                                player.translate(0, translation);
+                                yMovement += translation;
+                            }
+                        }
+                    }
+                    
+                    // Create list of points to track for downward movement
+                    ArrayList<Point> downTrackPoints = new ArrayList<>();
+                    downTrackPoints.add(down);
+                    
+                    slope = (left.getY() - down.getY()) / (left.getX() - down.getX());
+                    for(int downIndex = getGridY(left.getY()) + 1; downIndex < getGridY(down.getY()); downIndex++) {
+                        double y = downIndex * cellHeight;
+                        double x = slope * (y - down.getY()) + down.getX();
+                        downTrackPoints.add(new Point(x, y));
+                    }
+                    slope = (right.getY() - down.getY()) / (right.getX() - down.getX());
+                    for(int downIndex = getGridY(right.getY()) + 1; downIndex < getGridY(down.getY()); downIndex++) {
+                        double y = downIndex * cellHeight;
+                        double x = slope * (y - down.getY()) + down.getX();
+                        downTrackPoints.add(new Point(x, y));
+                    }
+                    for(Point point: downTrackPoints) {
+                        Vertex vertex = graph.getVertex(getGridIdentity(point));
+                        if(point == down && !vertex.containsNeighbor(vertex.getIdentity() - gridWidth)) {
+                            vertex = graph.getVertex(vertex.getIdentity() - gridWidth);
+                        }
+                        if(!vertex.containsNeighbor(vertex.getIdentity() + gridWidth)) {
+                            double downEdge = (Math.floor(vertex.getIdentity() / gridWidth) + 1) * cellHeight;
+                            if(point.getY() + yMovement > downEdge) {
+                                double translation = downEdge - (point.getY() + yMovement);
+                                player.translate(0, translation);
+                                yMovement += translation;
+                            }
+                        }
+                    }
+
                     // Rotate rectangle 
                     playerRect.setRotate(getDegrees(player.getTheta()));
 
                     // Apply translations
                     playerRect.setX(player.getX());
                     playerRect.setY(player.getY());
+                    
+
                     
                     // Move bullets
                     for(Weapon weapon : player.getWeapons()) {
@@ -444,6 +463,80 @@ public class ZombiesFXMLController implements Initializable {
                                 bullets.remove(bullet.destroy());
                             }
                         }
+                        
+                        for(Rectangle rect : dPath) {
+                            gridPane.getChildren().remove(rect);
+                        }
+                        dPath.clear();
+                     
+                        for (Character eachZombie : zombieList) {
+                    
+                            
+                                ArrayList<Vertex> zombiePath = graph.dijkstras(getGridIdentity(eachZombie.getX() + playerWidth / 2, eachZombie.getY() + playerHeight / 2), playerVertex.getIdentity());
+                                
+                                if(zombiePath.size() > 1){
+                                
+                                    double yDifference = (int)(zombiePath.get(1).getIdentity() / gridWidth) * cellHeight  -  eachZombie.getY();
+                                    double xDifference =  zombiePath.get(1).getIdentity() % gridWidth * cellWidth - eachZombie.getX();
+                                    
+                                    
+                                    if ( Double.isInfinite(xDifference) || Double.isNaN(xDifference))
+                                            {
+                                                System.out.println("this is x " + xDifference);
+                                            
+                                            }
+                                    
+                                    if(Double.isInfinite(yDifference) || Double.isNaN(yDifference))
+                                    {
+                                                            System.out.println("this is y " + yDifference);   
+                                    }
+                                    
+                                //     eachZombie.translate(zombiePath.get(1).getIdentity() % gridWidth * cellWidth - eachZombie.getX(), (int)(zombiePath.get(1).getIdentity() / gridWidth) * cellHeight - eachZombie.getY());
+                                 
+                                eachZombie.setTheta(Math.atan2( yDifference ,  xDifference));
+                            //    System.out.println("theta " + eachZombie.getTheta());
+                                
+                                double yTranslate = eachZombie.getSpeed() * Math.sin(eachZombie.getTheta());
+                                double xTranslate = eachZombie.getSpeed() * Math.cos(eachZombie.getTheta());
+                                        
+                                eachZombie.translate( xTranslate,yTranslate);
+                                
+                                             if ( Double.isInfinite(yTranslate) || Double.isNaN(yTranslate) || yTranslate == 0.0)
+                                            {
+                                                System.out.println("this is x " + yTranslate);
+                                            
+                                            }
+                                    
+                                    if(Double.isInfinite(xTranslate) || Double.isNaN(xTranslate) || xTranslate == 0.0)
+                                    {
+                                                            System.out.println("this is y " + xTranslate);   
+                                    }
+                                
+                                
+                                
+                                for(Vertex vertex : zombiePath) {
+                                    int index = vertex.getIdentity();
+                                    
+                                    Rectangle rect = new Rectangle(5, 5, Color.BLUE);
+                                    dPath.add(rect);
+                                    GridPane.setColumnIndex(rect, index % gridWidth);
+                                    GridPane.setRowIndex(rect, index / gridWidth);
+                                    gridPane.getChildren().add(rect);
+                                }
+                                  
+                                  Platform.runLater(() -> {
+                                   Rectangle zombieMove = zombieRectangleList.get(zombieList.indexOf(eachZombie));
+                                   zombieMove.setX(eachZombie.getX());
+                                   zombieMove.setY(eachZombie.getY());
+                                   zombieMove.setRotate(getDegrees(eachZombie.getTheta())); 
+                                  });
+
+                   
+                        }
+                        
+                        }
+                        
+                        
                     }
                 });
             }
@@ -500,14 +593,6 @@ public class ZombiesFXMLController implements Initializable {
         });
     }
     
-    public double getDistance(Point a, Point b) {
-        return Math.sqrt(Math.pow(b.getY() - a.getY(), 2) + Math.pow(b.getX() - a.getX(), 2));
-    }
-    
-    public Point getMidpoint(Point a, Point b) {
-        return new Point((a.getX() + b.getX()) / 2, (a.getY() + b.getY()) / 2);
-    }
-    
     public int getGridX(double x) {
         return (int)(x / cellWidth);
     }
@@ -554,3 +639,4 @@ public class ZombiesFXMLController implements Initializable {
         }
     }
 }
+
