@@ -52,7 +52,7 @@ public class ZombiesFXMLController implements Initializable {
     private final double centerHeight = (playerHeight / 2) - (bulletHeight / 2);
     
     private final Timer movementTimer = new Timer("MovementTimer");
-    private int fireCounter = 0;
+    private final Timer shootTimer = new Timer("ShootTimer");
     
     private Rectangle playerRect;
     private final Player player = new Player();
@@ -76,7 +76,7 @@ public class ZombiesFXMLController implements Initializable {
     public ZombiesFXMLController() {
         player.setHealth(100);
         player.setSpeed(1.5);
-        player.wield(new Weapon(1, 5, 20));
+        player.wield(new Weapon(1, 5));
         
         graph = new Graph(gridWidth * gridHeight);
         gridify(graph, gridWidth, gridHeight);
@@ -84,70 +84,38 @@ public class ZombiesFXMLController implements Initializable {
     
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        for(int i  = 1030; i < 8030; i += gridWidth) {
+            graph.disconnect(i);
+            
+            Rectangle rect = new Rectangle(5, 5, Color.BLACK);
+            GridPane.setColumnIndex(rect, i % gridWidth);
+            GridPane.setRowIndex(rect, i / gridWidth);
+            gridPane.getChildren().add(rect);
+        }
+        
+        for(int i = 1045; i < 1090; i++) {
+            graph.disconnect(i);
+            
+            Rectangle rect = new Rectangle(5, 5, Color.BLACK);
+            GridPane.setColumnIndex(rect, i % gridWidth);
+            GridPane.setRowIndex(rect, i / gridWidth);
+            gridPane.getChildren().add(rect);
+        }
+        
         cellWidth = gridPane.getPrefWidth() / gridWidth;
         cellHeight = gridPane.getPrefHeight() / gridHeight;
-        
-        // Top wall
-        for(int i  = 1616; i <= 1684; i++) {
-            graph.disconnect(i);
-            
-            Rectangle rect = new Rectangle(cellWidth, cellHeight, Color.BLACK);
-            GridPane.setColumnIndex(rect, i % gridWidth);
-            GridPane.setRowIndex(rect, i / gridWidth);
-            gridPane.getChildren().add(rect);
-            
-            if(i == 1646) {
-                i += 10;
-            }
-        }
-        
-        // Bottom wall
-        for(int i  = 8416; i <= 8484; i++) {
-            graph.disconnect(i);
-            
-            Rectangle rect = new Rectangle(cellWidth, cellHeight, Color.BLACK);
-            GridPane.setColumnIndex(rect, i % gridWidth);
-            GridPane.setRowIndex(rect, i / gridWidth);
-            gridPane.getChildren().add(rect);
-            
-            if(i == 8446) {
-                i += 10;
-            }
-        }
-        
-        // Left wall
-        for(int i = 1616; i <= 8416; i += gridWidth) {
-            graph.disconnect(i);
-            
-            Rectangle rect = new Rectangle(cellWidth, cellHeight, Color.BLACK);
-            GridPane.setColumnIndex(rect, i % gridWidth);
-            GridPane.setRowIndex(rect, i / gridWidth);
-            gridPane.getChildren().add(rect);
-            
-            if(i == 4616) {
-                i += 10 * gridWidth;
-            }
-        }
-        
-        // Right wall
-        for(int i = 1684; i <= 8484; i += gridWidth) {
-            graph.disconnect(i);
-            
-            Rectangle rect = new Rectangle(cellWidth, cellHeight, Color.BLACK);
-            GridPane.setColumnIndex(rect, i % gridWidth);
-            GridPane.setRowIndex(rect, i / gridWidth);
-            gridPane.getChildren().add(rect);
-            
-            if(i == 4684) {
-                i += 10 * gridWidth;
-            }
-        }
         
         player.setX((anchorPane.getPrefWidth() / 2) - (playerWidth / 2));
         player.setY((anchorPane.getPrefHeight() / 2) - (playerWidth / 2));
         
         playerRect = new Rectangle(player.getX(), player.getY(), playerWidth, playerHeight);
         playerRect.setFill(playerColor);
+        
+        // Forward mouse events from gridPane to anchorPane
+//        gridPane.addEventHandler(MouseEvent.ANY, (mouseEvent) -> {
+//            anchorPane.fireEvent(mouseEvent.copyFor(anchorPane, anchorPane));
+//            mouseEvent.consume();
+//        });
         
         // Get mouse position
         anchorPane.setOnMouseMoved((mouseEvent) -> {
@@ -171,6 +139,30 @@ public class ZombiesFXMLController implements Initializable {
         anchorPane.setOnMouseReleased((mouseEvent) -> {
             click = false;
         });
+       
+        TimerTask shootTask = new TimerTask() {
+            @Override()
+            public void run() {
+                if(click || clickCount > 0) {
+                    clickCount = 0;
+                    
+                    Platform.runLater(() -> {
+                        Bullet bullet = player.fireWeapon();
+                        bullet.setX((player.getX() + centerWidth) + (offset * Math.cos(player.getTheta())));
+                        bullet.setY((player.getY() + centerHeight) + (offset * Math.sin(player.getTheta())));
+
+                        Rectangle bulletRect = new Rectangle(bullet.getX(), bullet.getY() , bulletWidth, bulletHeight);
+                        bulletRect.setFill(bulletColor);
+                        bulletRect.setRotate(getDegrees(bullet.getTheta()));
+
+                        bullets.put(bullet, bulletRect);
+                        
+                        anchorPane.getChildren().add(bulletRect);
+                    });
+                }
+            }
+        };
+        shootTimer.scheduleAtFixedRate(shootTask, 0, 300);
         
         // Move player
         TimerTask movementTask = new TimerTask() {
@@ -180,29 +172,25 @@ public class ZombiesFXMLController implements Initializable {
                 player.setTheta(Math.atan2(mouseY - (player.getY() + (playerHeight / 2)), mouseX - (player.getX() + (playerWidth / 2))));
                 
                 Platform.runLater(() -> {
-                    // Fire bullets
-                    if(fireCounter++ >= player.getWeapon().getFireRate()) {
-                        fireCounter = 0;
-                        
-                        if(click || clickCount > 0) {
-                            clickCount = 0;
-
-                            Bullet bullet = player.fireWeapon();
-                            bullet.setX((player.getX() + centerWidth) + (offset * Math.cos(player.getTheta())));
-                            bullet.setY((player.getY() + centerHeight) + (offset * Math.sin(player.getTheta())));
-
-                            Rectangle bulletRect = new Rectangle(bullet.getX(), bullet.getY() , bulletWidth, bulletHeight);
-                            bulletRect.setFill(bulletColor);
-                            bulletRect.setRotate(getDegrees(bullet.getTheta()));
-
-                            bullets.put(bullet, bulletRect);
-
-                            anchorPane.getChildren().add(bulletRect);
-                        }
-                    }
-                    
                     // Get center of player
                     playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
+                    // Used for zombies to track player
+                    playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX(), playerCenter.getY()));
+                    
+//                  Example visualization of dijkstra's algorithm
+                    for(Rectangle rect : dijkstraPath) {
+                        gridPane.getChildren().remove(rect);
+                    }
+                    dijkstraPath.clear();
+                    for(Vertex vertex : graph.dijkstras(graph.getVertex(0), playerVertex)) {
+                        int index = vertex.getIdentity();
+                        
+                        Rectangle rect = new Rectangle(5, 5, Color.BLUE);
+                        dijkstraPath.add(rect);
+                        GridPane.setColumnIndex(rect, index % gridWidth);
+                        GridPane.setRowIndex(rect, index / gridWidth);
+                        gridPane.getChildren().add(rect);
+                    }
                     
                     double xMovement = 0;
                     double yMovement = 0;
@@ -372,24 +360,6 @@ public class ZombiesFXMLController implements Initializable {
                         downTrackPoints.add(new Point(x, y));
                     }
                     
-                    // Used for zombies to track player
-                    playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX() + xMovement, playerCenter.getY() + yMovement));
-                    
-                    // Example visualization of dijkstra's algorithm
-                    for(Rectangle rect : dijkstraPath) {
-                        gridPane.getChildren().remove(rect);
-                    }
-                    dijkstraPath.clear();
-                    for(Vertex vertex : graph.dijkstras(graph.getVertex(0), playerVertex)) {
-                        int index = vertex.getIdentity();
-                        
-                        Rectangle rect = new Rectangle(5, 5, Color.BLUE);
-                        dijkstraPath.add(rect);
-                        GridPane.setColumnIndex(rect, index % gridWidth);
-                        GridPane.setRowIndex(rect, index / gridWidth);
-                        gridPane.getChildren().add(rect);
-                    }
-                    
                     // Add tracking points to one list
                     ArrayList<Point> edgePoints = new ArrayList<>();
                     edgePoints.addAll(leftTrackPoints);
@@ -515,6 +485,7 @@ public class ZombiesFXMLController implements Initializable {
     // Cancel timers - gets called on exit in main method
     public void dispose() {
         movementTimer.cancel();
+        shootTimer.cancel();
     }
     
     // Add listeners to the scene

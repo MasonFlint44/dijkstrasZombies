@@ -12,11 +12,11 @@ import java.util.ArrayList;
  * @author mason
  */
 public class Graph {
-    private ArrayList<Vertex> vertices = new ArrayList<>();
+    private ArrayList<Vertex> verticies = new ArrayList<>();
     
     public Graph(int count) {
         for(int i = 0; i < count; i++) {
-            vertices.add(new Vertex(i));
+            verticies.add(new Vertex(i));
         }
     }
     
@@ -24,33 +24,20 @@ public class Graph {
         // Do nothing
     }
     
-    public Vertex addVertex(int identifier) {
+    public void addVertex(int identifier) {
         Vertex vertex = new Vertex(identifier);
-        addVertex(vertex);
-        return vertex;
-    }
-    
-    public void addVertex(Vertex vertex) {
-        if(vertex != null && !vertices.contains(vertex)) {
-            vertices.add(vertex);
+        if(!verticies.contains(vertex)) {
+            verticies.add(vertex);
         }
     }
     
     public boolean containsVertex(int identifier) {
-        return containsVertex(new Vertex(identifier));
-    }
-    
-    public boolean containsVertex(Vertex vertex) {
-        return vertices.contains(vertex);
+        return verticies.contains(new Vertex(identifier));
     }
     
     public void removeVertex(int identifier) {
-        removeVertex(new Vertex(identifier));
-    }
-    
-    public void removeVertex(Vertex vertex) {
-        disconnect(vertex.getIdentity());
-        vertices.remove(vertex);
+        disconnect(identifier);
+        verticies.remove(getVertex(identifier));
     }
     
     // Removes all neighbors from a vertex without removing vertex from graph
@@ -65,42 +52,18 @@ public class Graph {
         }
     }
     
-    public void disconnect(Vertex vertex) {
-        disconnect(vertex.getIdentity());
-    }
-    
     public int getVertexCount() {
-        return vertices.size();
+        return verticies.size();
     }
     
     public void addEdge(Vertex x, Vertex y, double distance) {
-        if(!vertices.contains(x)) {
-            addVertex(x);
+        if(verticies.contains(x) && verticies.contains(y)) {
+            x.addNeighbor(y, distance);
+            y.addNeighbor(x, distance);
         }
-        if(!vertices.contains(y)) {
-            addVertex(y);
-        }
-        x.addNeighbor(y, distance);
-        y.addNeighbor(x, distance);
     }
     
     public void addEdge(Vertex x, Vertex y) {
-        addEdge(x, y, 1);
-    }
-    
-    public void addEdge(int x, int y, double distance) {
-        Vertex xVertex = getVertex(x);
-        Vertex yVertex = getVertex(y);
-        if(xVertex == null) {
-            xVertex = addVertex(x);
-        }
-        if(yVertex == null) {
-            yVertex = addVertex(y);
-        }
-        addEdge(xVertex, yVertex, distance);
-    }
-    
-    public void addEdge(int x, int y) {
         addEdge(x, y, 1);
     }
     
@@ -111,45 +74,28 @@ public class Graph {
         return false;
     }
     
-    public boolean containsEdge(int x, int y) {
-        Vertex xVertex = getVertex(x);
-        Vertex yVertex = getVertex(y);
-        if(xVertex == null || yVertex == null) {
-            return false;
-        }
-        return containsEdge(xVertex, yVertex);
-    }
-    
     public void removeEdge(Vertex x, Vertex y) {
-        if(x != null) {
+        if(x.containsNeighbor(y) && y.containsNeighbor(x)) {
             x.removeNeighbor(y);
-        }
-        if(y != null) {
             y.removeNeighbor(x);
         }
     }
     
-    public void removeEdge(int x, int y) {
-        Vertex xVertex = getVertex(x);
-        Vertex yVertex = getVertex(y);
-        removeEdge(xVertex, yVertex);
-    }
-    
     public Vertex getVertex(int identifier) {
-        int index = vertices.indexOf(new Vertex(identifier));
+        int index = verticies.indexOf(new Vertex(identifier));
         if(index >= 0) {
-            return vertices.get(index);
+            return verticies.get(index);
         }
         return null;
     }
     
-    public ArrayList<Vertex> getVertices() {
-        return vertices;
+    public ArrayList<Vertex> getVerticies() {
+        return verticies;
     }
     
     // Helper method for Dijkstra's
     private void reset() {
-        for(Vertex vertex : vertices) {
+        for(Vertex vertex : verticies) {
             vertex.dijkstraInfo.distance = Double.POSITIVE_INFINITY;
             vertex.dijkstraInfo.settled = false;
         }
@@ -159,9 +105,9 @@ public class Graph {
         return dijkstras(getVertex(start), getVertex(stop));
     }
     
-    // This is Dijkstra's algorithm modified to return a path of vertices from the start node to the stop node
+    // This is Dijkstra's algorithm modified to return a path of verticies from the start node to the stop node
     public ArrayList<Vertex> dijkstras(Vertex start, Vertex stop) {
-        if(!vertices.contains(start) || !vertices.contains(stop)) {
+        if(!verticies.contains(start) || !verticies.contains(stop)) {
             return null;
         }
         
@@ -199,9 +145,9 @@ public class Graph {
         return path;
     }
     
-    private Vertex getMin(ArrayList<Vertex> vertices) {
-        Vertex min = vertices.get(0);
-        for(Vertex vertex : vertices) {
+    public Vertex getMin(ArrayList<Vertex> verticies) {
+        Vertex min = verticies.get(0);
+        for(Vertex vertex : verticies) {
             if(vertex.dijkstraInfo.distance < min.dijkstraInfo.distance) {
                 min = vertex;
             }
