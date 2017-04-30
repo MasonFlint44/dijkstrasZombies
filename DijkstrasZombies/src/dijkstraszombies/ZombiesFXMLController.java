@@ -84,7 +84,7 @@ public class ZombiesFXMLController implements Initializable {
     private int zombieCount = 0;
     private final int zombieMaxCount = 100;
     
-    private final double zombieSpeed = .5;
+    private final double zombieSpeed = 1;
     private final int zombieHealth = 50;
     
     private final ArrayList<Character> zombieList = new ArrayList<>();
@@ -249,8 +249,28 @@ public class ZombiesFXMLController implements Initializable {
                     Character zombieInstance = new Character();
                     zombieInstance.setHealth(zombieHealth);
                     zombieInstance.setSpeed(zombieSpeed);
-                    zombieInstance.setX(Math.random() * (anchorPane.getPrefWidth() - playerWidth));
-                    zombieInstance.setY(Math.random() * (anchorPane.getPrefHeight() - playerHeight));
+                    
+                    double random = Math.random();
+                    // Top edge
+                    if(random < 0.25) {
+                        zombieInstance.setX(Math.random() * (anchorPane.getPrefWidth() - playerWidth));
+                        zombieInstance.setY(0);
+                    } 
+                    // Right edge
+                    else if(random < 0.5) {
+                        zombieInstance.setX(anchorPane.getPrefWidth() - playerWidth);
+                        zombieInstance.setY(Math.random() * (anchorPane.getPrefHeight() - playerHeight));
+                    }
+                    // Bottom edge
+                    else if(random < 0.75) {
+                        zombieInstance.setX(Math.random() * (anchorPane.getPrefWidth() - playerWidth));
+                        zombieInstance.setY(anchorPane.getPrefHeight() - playerHeight);
+                    }
+                    // Left edge
+                    else if(random < 1.0) {
+                        zombieInstance.setX(0);
+                        zombieInstance.setY(Math.random() * (anchorPane.getPrefHeight() - playerHeight));
+                    }
 
                     Platform.runLater(() -> {
                         Rectangle zombieRectangle = new Rectangle(zombieInstance.getX(), zombieInstance.getY(), playerWidth, playerHeight);
