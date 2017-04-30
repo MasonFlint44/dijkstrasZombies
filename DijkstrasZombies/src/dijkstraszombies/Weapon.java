@@ -16,15 +16,17 @@ public class Weapon {
     private final double bulletSpeed;
     private final Integer maxAmmo;
     private int ammoCount = 0;
+    private final int fireRate;
     private ArrayList<Bullet> bullets = new ArrayList<>();
     
-    public Weapon(int damage, double bulletSpeed) {
-        this(damage, bulletSpeed, null);
+    public Weapon(int damage, double bulletSpeed, int fireRate) {
+        this(damage, bulletSpeed, fireRate,null);
     }
     
-    public Weapon(int damage, double bulletSpeed, Integer maxAmmo) {
+    public Weapon(int damage, double bulletSpeed, int fireRate, Integer maxAmmo) {
         this.damage = damage;
         this.bulletSpeed = bulletSpeed;
+        this.fireRate = fireRate;
         this.maxAmmo = maxAmmo;
     }
     
@@ -48,6 +50,10 @@ public class Weapon {
     
     public double getBulletSpeed() {
         return bulletSpeed;
+    }
+    
+    public int getFireRate() {
+        return fireRate;
     }
     
     public void fireBullet(Bullet bullet) {
