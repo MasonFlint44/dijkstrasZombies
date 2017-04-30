@@ -39,5 +39,4 @@ public class DijkstrasZombies extends Application {
         launch(args);
         controller.dispose();
     }
-    
 }
