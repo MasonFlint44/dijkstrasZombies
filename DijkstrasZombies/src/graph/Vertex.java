@@ -13,7 +13,7 @@ import java.util.Hashtable;
  * @author mason
  */
 public class Vertex {
-    // Since graph is undirected, edges will be represented by a list of neighbors
+    // Edges represented by adjacency list
     private final ArrayList<Vertex> neighbors = new ArrayList<>();
     // Distances to each neighboring vertex stored in hashtable
     private final Hashtable<Vertex, Double> distances = new Hashtable<>();
@@ -25,7 +25,7 @@ public class Vertex {
         this.identifier = identifier;
     }
     
-    // Add edge to both verticies to build undirected graph
+    // Add edge to both vertices to build undirected graph
     public void addNeighbor(Vertex vertex, double distance) {
         if(!neighbors.contains(vertex)) {
             neighbors.add(vertex);
@@ -33,16 +33,28 @@ public class Vertex {
         }
     }
     
+    public void addNeighbor(int identifier) {
+        addNeighbor(new Vertex(identifier));
+    }
+    
+    public void addNeighbor(int identifier, double distance) {
+        addNeighbor(new Vertex(identifier), distance);
+    }
+    
     public void addNeighbor(Vertex vertex) {
         addNeighbor(vertex, 1);
     }
     
-    // Remove edge from both verticies for undirected graph
+    // Remove edge from both vertices for undirected graph
     public void removeNeighbor(Vertex vertex) {
         if(neighbors.contains(vertex)) {
             distances.remove(vertex);
             neighbors.remove(vertex);
         }
+    }
+    
+    public void removeNeighbor(int identifier) {
+        removeNeighbor(new Vertex(identifier));
     }
     
     public Vertex getNeighbor(int identifier) {
@@ -73,6 +85,10 @@ public class Vertex {
     public double getDistance(Vertex vertex) {
         // Returns null if vertex is not a neighbor
         return distances.get(vertex);
+    }
+    
+    public double getDistance(int identifier) {
+        return getDistance(new Vertex(identifier));
     }
     
     public ArrayList<Vertex> getNeighbors() {
