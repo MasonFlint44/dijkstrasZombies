@@ -13,6 +13,7 @@ import java.util.Hashtable;
 import java.util.ResourceBundle;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -79,9 +80,9 @@ public class ZombiesFXMLController implements Initializable {
     
     // Zombie values
     private int zombieSpawnCounter = 0;
-    private final int zombieSpawnRate = 180;
+    private final int zombieSpawnRate = 10;
     private int zombieCount = 0;
-    private final int zombieMaxCount = 20;
+    private final int zombieMaxCount = 100;
     
     private final double zombieSpeed = .5;
     private final int zombieHealth = 50;
@@ -199,22 +200,13 @@ public class ZombiesFXMLController implements Initializable {
             click = false;
         });
         
-        // Dijkstra timer
         TimerTask dijkstraTask = new TimerTask() {
-            private boolean ready = true;
-            
             @Override
             public void run() {
-                if(ready) {
-                    ready = false;
-                    
-                    for(int i = 0; i < zombieList.size(); i++) {
-                        Character zombie = zombieList.get(i);
-                        ArrayList<Vertex> zombiePath = graph.dijkstras(getGridIdentity(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), playerVertex.getIdentity());
-                        dijkstraPaths.put(zombie, zombiePath);
-                    }
-                    
-                    ready = true;
+                for(int i = 0; i < zombieList.size(); i++) {
+                    Character zombie = zombieList.get(i);
+                    ArrayList<Vertex> zombiePath = graph.dijkstras(getGridIdentity(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), playerVertex.getIdentity());
+                    dijkstraPaths.put(zombie, zombiePath);
                 }
             }
         };
@@ -549,31 +541,37 @@ public class ZombiesFXMLController implements Initializable {
                     }
 
                     if(zombiePath.size() > 1){
-                        double yDifference = (((int)(zombiePath.get(1).getIdentity() / gridWidth) * cellHeight) + cellHeight / 2) - (zombie.getY() + (playerHeight / 2));
-                        double xDifference = ((zombiePath.get(1).getIdentity() % gridWidth * cellWidth) + cellWidth / 2) - (zombie.getX() + (playerWidth / 2)) ;
+                        try {
+                            int index = zombiePath.indexOf(graph.getVertex(getGridIdentity(zombie.getX() + (playerWidth / 2), zombie.getY() + (playerHeight / 2))));
+                        
+                            double yDifference = (((int)(zombiePath.get(index + 1).getIdentity() / gridWidth) * cellHeight) + cellHeight / 2) - (zombie.getY() + (playerHeight / 2));
+                            double xDifference = ((zombiePath.get(index + 1).getIdentity() % gridWidth * cellWidth) + cellWidth / 2) - (zombie.getX() + (playerWidth / 2)) ;
 
-                        zombie.setTheta(Math.atan2( yDifference , xDifference));
-                        zombie.translate(zombie.getSpeed() * Math.cos(zombie.getTheta()), zombie.getSpeed() * Math.sin(zombie.getTheta()));
+                            zombie.setTheta(Math.atan2( yDifference , xDifference));
+                            zombie.translate(zombie.getSpeed() * Math.cos(zombie.getTheta()), zombie.getSpeed() * Math.sin(zombie.getTheta()));
 
-//                        // Draw dijkstra path
-//                        for(Vertex vertex : zombiePath) {
-//                            int index = vertex.getIdentity();
-//
-//                            Platform.runLater(() -> {
-//                                Rectangle rect = new Rectangle(5, 5, Color.BLUE);
-//                                dijkstraPath.add(rect);
-//                                GridPane.setColumnIndex(rect, index % gridWidth);
-//                                GridPane.setRowIndex(rect, index / gridWidth);
-//                                gridPane.getChildren().add(rect);
-//                            });
-//                        }
+    //                        // Draw dijkstra path
+    //                        for(Vertex vertex : zombiePath) {
+    //                            int index = vertex.getIdentity();
+    //
+    //                            Platform.runLater(() -> {
+    //                                Rectangle rect = new Rectangle(5, 5, Color.BLUE);
+    //                                dijkstraPath.add(rect);
+    //                                GridPane.setColumnIndex(rect, index % gridWidth);
+    //                                GridPane.setRowIndex(rect, index / gridWidth);
+    //                                gridPane.getChildren().add(rect);
+    //                            });
+    //                        }
 
-                        Platform.runLater(() -> {
-                            Rectangle zombieRect = zombieRectangleList.get(zombieList.indexOf(zombie));
-                            zombieRect.setX(zombie.getX());
-                            zombieRect.setY(zombie.getY());
-                            zombieRect.setRotate(getDegrees(zombie.getTheta())); 
-                        });
+                            Platform.runLater(() -> {
+                                Rectangle zombieRect = zombieRectangleList.get(zombieList.indexOf(zombie));
+                                zombieRect.setX(zombie.getX());
+                                zombieRect.setY(zombie.getY());
+                                zombieRect.setRotate(getDegrees(zombie.getTheta()));
+                            });
+                        } catch(IndexOutOfBoundsException ex) {
+                            // Do nothing
+                        }
                     }
                 }
             }
