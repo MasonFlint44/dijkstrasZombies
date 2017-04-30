@@ -55,7 +55,7 @@ public class ZombiesFXMLController implements Initializable {
     private int fireCounter = 0;
     
     private Rectangle playerRect;
-    private final Player player = new Player();
+    private final Character player = new Character();
     private final Hashtable<Bullet, Rectangle> bullets = new Hashtable<>();
     private Point playerCenter;
     private Vertex playerVertex;
