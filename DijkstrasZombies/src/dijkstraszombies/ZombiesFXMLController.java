@@ -108,7 +108,7 @@ public class ZombiesFXMLController implements Initializable {
     public ZombiesFXMLController() {
         player.setHealth(100);
         player.setSpeed(1.5);
-        player.wield(new Weapon(1, 3, 20));
+        player.wield(new Weapon(1, 5, 20));
         
         graph = new Graph(gridWidth * gridHeight);
         gridify(graph, gridWidth, gridHeight);
@@ -443,7 +443,7 @@ public class ZombiesFXMLController implements Initializable {
                         // Check for wall collisions
                         Corners bulletCorners = new Corners(bulletCenter, bullet.getTheta(), bulletWidth, bulletHeight);
                         ArrayList<Point> bulletEdges = getEdgePoints(bulletCorners);
-                        if(checkForBulletCollision(bulletEdges, bulletCorners)) {
+                        if(checkForBulletCollision(bulletEdges, bulletCorners, bulletCenter)) {
                             Platform.runLater(() -> {
                                 anchorPane.getChildren().remove(bulletRect);
                             });
@@ -460,7 +460,7 @@ public class ZombiesFXMLController implements Initializable {
         });
     }
     
-    private boolean checkForBulletCollision(ArrayList<Point> edgePoints, Corners corners) {
+    private boolean checkForBulletCollision(ArrayList<Point> edgePoints, Corners corners, Point center) {
         // Check for collisions with zombies
         for(int i = 0; i < zombieList.size(); i++) {
             Character zombie = zombieList.get(i);
@@ -470,52 +470,9 @@ public class ZombiesFXMLController implements Initializable {
                 continue;
             }
             
-            if(rectangleContainsPoint(zombieCorner, corners.getLeft())) {
-                zombieCount--;
-                Platform.runLater(() -> {
-                    try {
-                        int index = zombieList.indexOf(zombie);
-                        zombieList.remove(index);
-                        Rectangle rect = zombieRectangleList.remove(index);
-                        anchorPane.getChildren().remove(rect);
-                    } catch(ArrayIndexOutOfBoundsException ex) {
-                        // Do nothing
-                    }
-                });
-                return true;
-            }
+            Point zombieCenter = new Point(zombie.getX() + (playerWidth / 2), zombie.getY() + (playerHeight / 2));
             
-            if(rectangleContainsPoint(zombieCorner, corners.getRight())) {
-                zombieCount--;
-                Platform.runLater(() -> {
-                    try {
-                        int index = zombieList.indexOf(zombie);
-                        zombieList.remove(index);
-                        Rectangle rect = zombieRectangleList.remove(index);
-                        anchorPane.getChildren().remove(rect);
-                    } catch(ArrayIndexOutOfBoundsException ex) {
-                        // Do nothing
-                    }
-                });
-                return true;
-            }
-            
-            if(rectangleContainsPoint(zombieCorner, corners.getUp())) {
-                zombieCount--;
-                Platform.runLater(() -> {
-                    try {
-                        int index = zombieList.indexOf(zombie);
-                        zombieList.remove(index);
-                        Rectangle rect = zombieRectangleList.remove(index);
-                        anchorPane.getChildren().remove(rect);
-                    } catch(ArrayIndexOutOfBoundsException ex) {
-                        // Do nothing
-                    }
-                });
-                return true;
-            }
-            
-            if(rectangleContainsPoint(zombieCorner, corners.getDown())) {
+            if(overlaps(corners, center, zombieCorner, zombieCenter)) {
                 zombieCount--;
                 Platform.runLater(() -> {
                     try {
@@ -530,6 +487,7 @@ public class ZombiesFXMLController implements Initializable {
                 return true;
             }
         }
+        
         // Check for collisions with exterior walls
         if(corners.getLeft().getX() < 0) {
             return true;
@@ -714,6 +672,28 @@ public class ZombiesFXMLController implements Initializable {
         scene.setOnKeyReleased((keyEvent) -> {
             setArrowValues(keyEvent.getCode(), false);
         });
+    }
+    
+    public boolean overlaps(Corners corners1, Point center1, Corners corners2, Point center2) {
+        if(center1.getX() <= center2.getX()) {
+            if(rectangleContainsPoint(corners2, corners1.getRight()) || rectangleContainsPoint(corners1, corners2.getLeft())) {
+                return true;
+            }
+        } else {
+            if(rectangleContainsPoint(corners2, corners1.getLeft()) || rectangleContainsPoint(corners1, corners2.getRight())) {
+                return true;
+            }
+        }
+        if(center1.getY() <= center2.getY()) {
+            if(rectangleContainsPoint(corners2, corners1.getDown()) || rectangleContainsPoint(corners1, corners2.getUp())) {
+                return true;
+            }
+        } else {
+            if(rectangleContainsPoint(corners2, corners1.getUp()) || rectangleContainsPoint(corners1, corners2.getDown())) {
+                return true;
+            }
+        }
+        return false;
     }
     
     // Use vector math to check if given rectangle contains point m
