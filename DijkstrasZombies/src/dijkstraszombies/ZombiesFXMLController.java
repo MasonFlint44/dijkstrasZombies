@@ -54,7 +54,7 @@ public class ZombiesFXMLController implements Initializable {
     
     // Bullet values
     private final double bulletWidth = 5;
-    private final double bulletHeight = 5;
+    private final double bulletHeight = 4;
     private final Color bulletColor = Color.BLACK;
     private final double offset = (playerWidth / 2) + (bulletWidth / 2);
     private final double centerWidth = (playerWidth / 2) - (bulletWidth / 2);
@@ -98,6 +98,8 @@ public class ZombiesFXMLController implements Initializable {
     private final double sceneWidth = 500;
     private final double sceneHeight = 500;
     
+    private final Timer bulletMoveTimer = new Timer("BulletMove");
+    
     @FXML
     private AnchorPane anchorPane;
     @FXML
@@ -106,7 +108,7 @@ public class ZombiesFXMLController implements Initializable {
     public ZombiesFXMLController() {
         player.setHealth(100);
         player.setSpeed(1.5);
-        player.wield(new Weapon(1, 2.5, 20));
+        player.wield(new Weapon(1, 3, 20));
         
         graph = new Graph(gridWidth * gridHeight);
         gridify(graph, gridWidth, gridHeight);
@@ -412,7 +414,13 @@ public class ZombiesFXMLController implements Initializable {
                         }
                     }
                 }
-                
+            }
+        };
+        movementTimer.scheduleAtFixedRate(movementTask, 0, 15);
+        
+        TimerTask bulletMoveTask = new TimerTask(){
+            @Override
+            public void run() {
                 // Move bullets
                 for(Weapon weapon : player.getWeapons()) {
                     for(int i = weapon.getBullets().size() - 1; i >= 0; i--) {
@@ -445,7 +453,7 @@ public class ZombiesFXMLController implements Initializable {
                 }
             }
         };
-        movementTimer.scheduleAtFixedRate(movementTask, 0, 15);
+        bulletMoveTimer.scheduleAtFixedRate(bulletMoveTask, 0, 15);
         
         Platform.runLater(() -> {
             anchorPane.getChildren().add(playerRect);
@@ -462,23 +470,65 @@ public class ZombiesFXMLController implements Initializable {
                 continue;
             }
             
-            if(corners.getLeft().getX() < zombieCorner.getRight().getX() && zombieCorner.getLeft().getX() < corners.getRight().getX()) {
-                if(corners.getLeft().getY() > zombieCorner.getRight().getY() && zombieCorner.getLeft().getY() > corners.getRight().getY()) {
-                    zombieCount--;
-                    Platform.runLater(() -> {
-                        try {
-                            int index = zombieList.indexOf(zombie);
-                            zombieList.remove(index);
-                            Rectangle rect = zombieRectangleList.remove(index);
-                            anchorPane.getChildren().remove(rect);
-                        } catch(ArrayIndexOutOfBoundsException ex) {
-                            // Do nothing
-                        }
-                    });
-                    return true;
-                }
+            if(rectangleContainsPoint(zombieCorner, corners.getLeft())) {
+                zombieCount--;
+                Platform.runLater(() -> {
+                    try {
+                        int index = zombieList.indexOf(zombie);
+                        zombieList.remove(index);
+                        Rectangle rect = zombieRectangleList.remove(index);
+                        anchorPane.getChildren().remove(rect);
+                    } catch(ArrayIndexOutOfBoundsException ex) {
+                        // Do nothing
+                    }
+                });
+                return true;
             }
             
+            if(rectangleContainsPoint(zombieCorner, corners.getRight())) {
+                zombieCount--;
+                Platform.runLater(() -> {
+                    try {
+                        int index = zombieList.indexOf(zombie);
+                        zombieList.remove(index);
+                        Rectangle rect = zombieRectangleList.remove(index);
+                        anchorPane.getChildren().remove(rect);
+                    } catch(ArrayIndexOutOfBoundsException ex) {
+                        // Do nothing
+                    }
+                });
+                return true;
+            }
+            
+            if(rectangleContainsPoint(zombieCorner, corners.getUp())) {
+                zombieCount--;
+                Platform.runLater(() -> {
+                    try {
+                        int index = zombieList.indexOf(zombie);
+                        zombieList.remove(index);
+                        Rectangle rect = zombieRectangleList.remove(index);
+                        anchorPane.getChildren().remove(rect);
+                    } catch(ArrayIndexOutOfBoundsException ex) {
+                        // Do nothing
+                    }
+                });
+                return true;
+            }
+            
+            if(rectangleContainsPoint(zombieCorner, corners.getDown())) {
+                zombieCount--;
+                Platform.runLater(() -> {
+                    try {
+                        int index = zombieList.indexOf(zombie);
+                        zombieList.remove(index);
+                        Rectangle rect = zombieRectangleList.remove(index);
+                        anchorPane.getChildren().remove(rect);
+                    } catch(ArrayIndexOutOfBoundsException ex) {
+                        // Do nothing
+                    }
+                });
+                return true;
+            }
         }
         // Check for collisions with exterior walls
         if(corners.getLeft().getX() < 0) {
@@ -651,6 +701,7 @@ public class ZombiesFXMLController implements Initializable {
     public void dispose() {
         movementTimer.cancel();
         dijkstraTimer.cancel();
+        bulletMoveTimer.cancel();
     }
     
     // Add listeners to the scene
@@ -663,6 +714,26 @@ public class ZombiesFXMLController implements Initializable {
         scene.setOnKeyReleased((keyEvent) -> {
             setArrowValues(keyEvent.getCode(), false);
         });
+    }
+    
+    // Use vector math to check if given rectangle contains point m
+    public boolean rectangleContainsPoint(Corners rectCorners, Point m) {
+        Point am = new Point(m.getX() - rectCorners.getLeft().getX(), m.getY() - rectCorners.getLeft().getY());
+        Point ab = new Point(rectCorners.getUp().getX() - rectCorners.getLeft().getX(), rectCorners.getUp().getY() - rectCorners.getLeft().getY());
+        Point ad = new Point(rectCorners.getDown().getX() - rectCorners.getLeft().getX(), rectCorners.getDown().getY() - rectCorners.getLeft().getY());
+
+        double dotAmAb = dot(am, ab);
+        if(0 <= dotAmAb && dotAmAb <= dot(ab, ab)) {
+            double dotAmAd = dot(am, ad);
+            if(0 <= dotAmAd && dotAmAd <= dot(ad, ad)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    public double dot(Point a, Point b) {
+        return a.getX() * b.getX() + a.getY() * b.getY();
     }
     
     public double getDistance(Point a, Point b) {
