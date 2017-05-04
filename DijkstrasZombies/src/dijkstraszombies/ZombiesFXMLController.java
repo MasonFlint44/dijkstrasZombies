@@ -27,6 +27,7 @@ import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.text.Text;
 
 /**
  *
@@ -42,6 +43,7 @@ public class ZombiesFXMLController implements Initializable {
     private boolean right = false;
     private boolean up = false;
     private boolean down = false;
+    private boolean spaceBar = false;
     
     // Click and number of clicks
     private boolean click = false;
@@ -57,7 +59,7 @@ public class ZombiesFXMLController implements Initializable {
     private final double bulletHeight = 4;
     private final Color bulletColor = Color.BLACK;
     private final double offset = (playerWidth / 2) + (bulletWidth / 2);
-    private final double centerWidth = (playerWidth / 2) - (bulletWidth / 2);
+    private final double centerWidth = (playerWidth / 2) + (bulletWidth / 2);
     private final double centerHeight = (playerHeight / 2) - (bulletHeight / 2);
     
     // Movement values
@@ -83,6 +85,7 @@ public class ZombiesFXMLController implements Initializable {
     private final int zombieSpawnRate = 30;
     private int zombieCount = 0;
     private final int zombieMaxCount = 100;
+    private int killCount = 0;
     
     private final double zombieSpeed = 1;
     private final int zombieHealth = 1;
@@ -99,16 +102,25 @@ public class ZombiesFXMLController implements Initializable {
     private final double sceneHeight = 500;
     
     private final Timer bulletMoveTimer = new Timer("BulletMove");
+    private final Timer zombieMoveTimer = new Timer("ZombieMove");
+    
+    private volatile boolean pauseGame = false;
     
     @FXML
     private AnchorPane anchorPane;
     @FXML
     private GridPane gridPane;
+    @FXML
+    private Text healthText;
+    @FXML
+    private Text killText;
+    @FXML
+    private Text pauseText;
     
     public ZombiesFXMLController() {
         player.setHealth(100);
         player.setSpeed(1.5);
-        player.wield(new Weapon(1, 5, 20));
+        player.wield(new Weapon(1, 7, 15));
         
         graph = new Graph(gridWidth * gridHeight);
         gridify(graph, gridWidth, gridHeight);
@@ -193,6 +205,10 @@ public class ZombiesFXMLController implements Initializable {
         }
         
         Platform.runLater(() -> {
+            pauseText.setVisible(false);
+            healthText.setText("Health: " + player.getHealth());
+            killText.setText("Kills: " + killCount);
+            
             player.setX((sceneWidth / 2) - (playerWidth / 2));
             player.setY((sceneHeight / 2) - (playerWidth / 2));
             
@@ -226,10 +242,12 @@ public class ZombiesFXMLController implements Initializable {
         TimerTask dijkstraTask = new TimerTask() {
             @Override
             public void run() {
-                for(int i = 0; i < zombieList.size(); i++) {
-                    Character zombie = zombieList.get(i);
-                    ArrayList<Vertex> zombiePath = graph.dijkstras(getGridIdentity(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), playerVertex.getIdentity());
-                    dijkstraPaths.put(zombie, zombiePath);
+                if(!pauseGame) {
+                    for(int i = 0; i < zombieList.size(); i++) {
+                        Character zombie = zombieList.get(i);
+                        ArrayList<Vertex> zombiePath = graph.dijkstras(getGridIdentity(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), playerVertex.getIdentity());
+                        dijkstraPaths.put(zombie, zombiePath);
+                    }
                 }
             }
         };
@@ -239,215 +257,309 @@ public class ZombiesFXMLController implements Initializable {
         TimerTask movementTask = new TimerTask() {
             @Override
             public void run() {
-                // Calculate degrees of rotation
-                player.setTheta(Math.atan2(mouseY - (player.getY() + (playerHeight / 2)), mouseX - (player.getX() + (playerWidth / 2))));
-                
-                // Fire bullets
-                if(fireCounter++ >= player.getWeapon().getFireRate()) {
-                    fireCounter = 0;
+                if(!pauseGame) {
+                    // Calculate degrees of rotation
+                    player.setTheta(Math.atan2(mouseY - (player.getY() + (playerHeight / 2)), mouseX - (player.getX() + (playerWidth / 2))));
 
-                    if(click || clickCount > 0) {
-                        clickCount = 0;
+                    // Fire bullets
+                    if(fireCounter++ >= player.getWeapon().getFireRate()) {
+                        fireCounter = 0;
 
-                        Bullet bullet = player.fireWeapon();
-                        bullet.setX((player.getX() + centerWidth) + (offset * Math.cos(player.getTheta())));
-                        bullet.setY((player.getY() + centerHeight) + (offset * Math.sin(player.getTheta())));
+                        if(click || clickCount > 0) {
+                            clickCount = 0;
+
+                            Bullet bullet = player.fireWeapon();
+    //                        bullet.setX((player.getX() + centerWidth) + (offset * Math.cos(player.getTheta())));
+    //                        bullet.setY((player.getY() + centerHeight) + (offset * Math.sin(player.getTheta())));
+                            bullet.setX(player.getX() + (playerWidth / 2) - (bulletWidth / 2));
+                            bullet.setY(player.getY() + (playerHeight / 2) - (bulletWidth / 2));
+
+                            Platform.runLater(() -> {
+                                Rectangle bulletRect = new Rectangle(bullet.getX(), bullet.getY() , bulletWidth, bulletHeight);
+                                bulletRect.setFill(bulletColor);
+                                bulletRect.setRotate(getDegrees(bullet.getTheta()));
+
+                                bullets.put(bullet, bulletRect);
+                                anchorPane.getChildren().add(bulletRect);
+                            });
+                        }
+                    }
+
+                    // Spawn zombies
+                    if (zombieSpawnCounter++  >= zombieSpawnRate && zombieCount < zombieMaxCount) {
+                        zombieSpawnCounter = 0;
+                        zombieCount += 1;
+
+                        Character zombieInstance = new Character();
+                        zombieInstance.setHealth(zombieHealth);
+                        zombieInstance.setSpeed(zombieSpeed);
+
+                        double random = Math.random();
+                        // Top edge
+                        if(random < 0.25) {
+                            zombieInstance.setX(Math.random() * (sceneWidth - playerWidth));
+                            zombieInstance.setY(0);
+                        } 
+                        // Right edge
+                        else if(random < 0.5) {
+                            zombieInstance.setX(sceneWidth - playerWidth);
+                            zombieInstance.setY(Math.random() * (sceneHeight - playerHeight));
+                        }
+                        // Bottom edge
+                        else if(random < 0.75) {
+                            zombieInstance.setX(Math.random() * (sceneWidth - playerWidth));
+                            zombieInstance.setY(sceneHeight - playerHeight);
+                        }
+                        // Left edge
+                        else {
+                            zombieInstance.setX(0);
+                            zombieInstance.setY(Math.random() * (sceneHeight - playerHeight));
+                        }
 
                         Platform.runLater(() -> {
-                            Rectangle bulletRect = new Rectangle(bullet.getX(), bullet.getY() , bulletWidth, bulletHeight);
-                            bulletRect.setFill(bulletColor);
-                            bulletRect.setRotate(getDegrees(bullet.getTheta()));
+                            Rectangle zombieRectangle = new Rectangle(zombieInstance.getX(), zombieInstance.getY(), playerWidth, playerHeight);
+                            zombieRectangle.setFill(Color.GREEN);
+                            anchorPane.getChildren().add(zombieRectangle);
 
-                            bullets.put(bullet, bulletRect);
-                            anchorPane.getChildren().add(bulletRect);
+                            zombieList.add(zombieInstance);
+                            zombieRectangleList.add(zombieRectangle);
                         });
                     }
-                }
-                
-                // Spawn zombies
-                if (zombieSpawnCounter++  >= zombieSpawnRate && zombieCount < zombieMaxCount) {
-                    zombieSpawnCounter = 0;
-                    zombieCount += 1;
 
-                    Character zombieInstance = new Character();
-                    zombieInstance.setHealth(zombieHealth);
-                    zombieInstance.setSpeed(zombieSpeed);
-                    
-                    double random = Math.random();
-                    // Top edge
-                    if(random < 0.25) {
-                        zombieInstance.setX(Math.random() * (sceneWidth - playerWidth));
-                        zombieInstance.setY(0);
-                    } 
-                    // Right edge
-                    else if(random < 0.5) {
-                        zombieInstance.setX(sceneWidth - playerWidth);
-                        zombieInstance.setY(Math.random() * (sceneHeight - playerHeight));
+                    // Get center of player
+                    playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
+
+                    double xMovement = 0;
+                    double yMovement = 0;
+
+                    // Move player
+                    if(left) {
+                        double distance = player.getSpeed();
+                        if(up || down) {
+                            distance = player.getSpeed() / Math.sqrt(2);
+                        }
+                        player.translate(-distance, 0);
+                        xMovement -= distance;
                     }
-                    // Bottom edge
-                    else if(random < 0.75) {
-                        zombieInstance.setX(Math.random() * (sceneWidth - playerWidth));
-                        zombieInstance.setY(sceneHeight - playerHeight);
+                    if(right) {
+                        double distance = player.getSpeed();
+                        if(up || down) {
+                            distance = player.getSpeed() / Math.sqrt(2);
+                        }
+                        player.translate(distance, 0);
+                        xMovement += distance;
                     }
-                    // Left edge
-                    else {
-                        zombieInstance.setX(0);
-                        zombieInstance.setY(Math.random() * (sceneHeight - playerHeight));
+                    if(up) {
+                        double distance = player.getSpeed();
+                        if(left || right) {
+                            distance = player.getSpeed() / Math.sqrt(2);
+                        }
+                        player.translate(0, -distance);
+                        yMovement -= distance;
                     }
+                    if(down) {
+                        double distance = player.getSpeed();
+                        if(left || right) {
+                            distance = player.getSpeed() / Math.sqrt(2);
+                        }
+                        player.translate(0, distance);
+                        yMovement += distance;
+                    }
+
+                    // Get list of edge points for movement tracking
+                    Corners playerCorners = new Corners(playerCenter, player.getTheta(), playerWidth, playerHeight);
+                    ArrayList<Point> edgePoints = getEdgePoints(playerCorners);
+
+                    // Check player for wall collisions
+                    checkForWallCollisions(edgePoints, playerCorners, player, playerCenter, xMovement, yMovement);
 
                     Platform.runLater(() -> {
-                        Rectangle zombieRectangle = new Rectangle(zombieInstance.getX(), zombieInstance.getY(), playerWidth, playerHeight);
-                        zombieRectangle.setFill(Color.GREEN);
-                        anchorPane.getChildren().add(zombieRectangle);
+                        // Rotate rectangle 
+                        playerRect.setRotate(getDegrees(player.getTheta()));
 
-                        zombieList.add(zombieInstance);
-                        zombieRectangleList.add(zombieRectangle);
+                        // Apply translations
+                        playerRect.setX(player.getX());
+                        playerRect.setY(player.getY());
                     });
-                }
-                
-                // Get center of player
-                playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
-                
-                double xMovement = 0;
-                double yMovement = 0;
 
-                // Move player
-                if(left) {
-                    double distance = player.getSpeed();
-                    if(up || down) {
-                        distance = player.getSpeed() / Math.sqrt(2);
-                    }
-                    player.translate(-distance, 0);
-                    xMovement -= distance;
-                }
-                if(right) {
-                    double distance = player.getSpeed();
-                    if(up || down) {
-                        distance = player.getSpeed() / Math.sqrt(2);
-                    }
-                    player.translate(distance, 0);
-                    xMovement += distance;
-                }
-                if(up) {
-                    double distance = player.getSpeed();
-                    if(left || right) {
-                        distance = player.getSpeed() / Math.sqrt(2);
-                    }
-                    player.translate(0, -distance);
-                    yMovement -= distance;
-                }
-                if(down) {
-                    double distance = player.getSpeed();
-                    if(left || right) {
-                        distance = player.getSpeed() / Math.sqrt(2);
-                    }
-                    player.translate(0, distance);
-                    yMovement += distance;
-                }
+                    playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
+                    playerCorners = new Corners(playerCenter, player.getTheta(), playerWidth, playerHeight);
 
-                // Get list of edge points for movement tracking
-                Corners playerCorners = new Corners(playerCenter, player.getTheta(), playerWidth, playerHeight);
-                ArrayList<Point> edgePoints = getEdgePoints(playerCorners);
+                    // Check for collisions with zombies
+                    for(int i = 0; i < zombieList.size(); i++) {
+                        Character zombie = zombieList.get(i);
+                        Corners zombieCorner = zombieCorners.get(zombie);
 
-                // Check player for wall collisions
-                checkForWallCollisions(edgePoints, playerCorners, player, playerCenter, xMovement, yMovement);
-
-                Platform.runLater(() -> {
-                    // Rotate rectangle 
-                    playerRect.setRotate(getDegrees(player.getTheta()));
-
-                    // Apply translations
-                    playerRect.setX(player.getX());
-                    playerRect.setY(player.getY());
-                });
-
-                // Used for zombies to track player
-                playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX() + xMovement, playerCenter.getY() + yMovement));
-                
-                for(int i = 0; i < zombieList.size(); i++) {
-                    Character zombie = zombieList.get(i);
-                    
-                    ArrayList<Vertex> zombiePath = dijkstraPaths.get(zombie);
-                    if(zombiePath == null) {
-                        continue;
-                    }
-
-                    if(zombiePath.size() > 1){
-                        try {
-                            Point zombieCenter = new Point(zombie.getX() + (playerWidth / 2), zombie.getY() + (playerHeight / 2));
-                            int index = zombiePath.indexOf(graph.getVertex(getGridIdentity(zombieCenter.getX(), zombieCenter.getY())));
-                            
-//                            if(index < 0) {
-//                                continue;
-//                            }
-                            
-                            double yDifference = (((int)(zombiePath.get(index + 1).getIdentity() / gridWidth) * cellHeight) + cellHeight / 2) - (zombie.getY() + (playerHeight / 2));
-                            double xDifference = ((zombiePath.get(index + 1).getIdentity() % gridWidth * cellWidth) + cellWidth / 2) - (zombie.getX() + (playerWidth / 2)) ;
-                            
-                            zombie.setTheta(Math.atan2(yDifference , xDifference));
-                            
-                            double xZombieMove = zombie.getSpeed() * Math.cos(zombie.getTheta());
-                            double yZombieMove = zombie.getSpeed() * Math.sin(zombie.getTheta());
-                            
-                            Corners corners = new Corners(zombieCenter, zombie.getTheta(), playerWidth, playerHeight);
-                            ArrayList<Point> zombieEdges = getEdgePoints(corners);
-                            checkForWallCollisions(zombieEdges, corners, zombie, zombieCenter, xZombieMove, yZombieMove);
-                            zombie.translate(xZombieMove, yZombieMove);
-                            
-                            // Store corners of zombie to check for bullet collisions
-                            zombieCorners.put(zombie, new Corners(new Point(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), zombie.getTheta(), playerWidth, playerHeight));
-                            
-                            Platform.runLater(() -> {
-                                try {
-                                    Rectangle zombieRect = zombieRectangleList.get(zombieList.indexOf(zombie));
-                                
-                                    zombieRect.setX(zombie.getX());
-                                    zombieRect.setY(zombie.getY());
-                                    zombieRect.setRotate(getDegrees(zombie.getTheta()));
-                                } catch(ArrayIndexOutOfBoundsException ex) {
-                                    // Do nothing
-                                }
-                            });
-                            
-                        } catch(IndexOutOfBoundsException ex) {
-                            // Do nothing
+                        if(zombieCorner == null) {
+                            continue;
                         }
+
+                        Point zombieCenter = new Point(zombie.getX() + (playerWidth / 2), zombie.getY() + (playerHeight / 2));
+
+                        if(getDistance(playerCenter, zombieCenter) <= 2 * Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2))) {
+                            if(overlaps(playerCorners, playerCenter, zombieCorner, zombieCenter)) {
+                                if(player.getHealth() > 0) {
+                                    player.setHealth(player.getHealth() - 1);
+
+                                    Platform.runLater(() -> {
+                                        healthText.setText("Health: " + player.getHealth());
+                                    });
+                                } else {
+                                    pauseGame = true;
+                                    pauseText.setVisible(true);
+                                }
+                            }
+                        }
+                    }
+
+                    // Used for zombies to track player
+                    playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX() + xMovement, playerCenter.getY() + yMovement));
+                } else {
+                    if(spaceBar) {
+                        Platform.runLater(() -> {
+                            for(Character resetZombie: zombieList) {
+                                anchorPane.getChildren().remove(zombieRectangleList.get(zombieList.indexOf(resetZombie)));
+                            }
+                            zombieList.clear();
+                            zombieRectangleList.clear();
+                            zombieCount = 0;
+
+                            killCount = 0;
+                            killText.setText("Kills: " + killCount);
+
+                            for(Weapon weapon: player.getWeapons()) {
+                                for(Bullet bullet: weapon.getBullets()) {
+                                    anchorPane.getChildren().remove(bullets.get(bullet));
+                                }
+                                weapon.getBullets().clear();
+                            }
+
+                            dijkstraPaths.clear();
+
+                            player.setHealth(player.getMaxHealth());
+                            healthText.setText("Health: " + player.getHealth());
+
+                            player.setX(sceneWidth / 2);
+                            player.setY(sceneWidth / 2);
+                            player.setTheta(0);
+
+                            playerRect.setX(player.getX());
+                            playerRect.setY(player.getY());
+                            playerRect.setRotate(player.getTheta());
+
+                            playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
+
+                            pauseGame = false;
+                            pauseText.setVisible(false);
+                        });
                     }
                 }
             }
         };
         movementTimer.scheduleAtFixedRate(movementTask, 0, 15);
         
-        TimerTask bulletMoveTask = new TimerTask(){
+        TimerTask zombieMoveTask = new TimerTask() {
             @Override
             public void run() {
-                // Move bullets
-                for(Weapon weapon : player.getWeapons()) {
-                    for(int i = weapon.getBullets().size() - 1; i >= 0; i--) {
-                        Bullet bullet = weapon.getBullets().get(i);
-                        bullet.move();
+                if(!pauseGame) {
+                    for(int i = 0; i < zombieList.size(); i++) {
+                        Character zombie = zombieList.get(i);
 
-                        Point bulletCenter = new Point(bullet.getX() + (bulletWidth / 2), bullet.getY() + (bulletHeight / 2));
-
-                        Rectangle bulletRect = bullets.get(bullet);
-
-                        if(bulletRect == null) {
+                        ArrayList<Vertex> zombiePath = dijkstraPaths.get(zombie);
+                        if(zombiePath == null) {
                             continue;
                         }
 
-                        Platform.runLater(() -> {
-                            bulletRect.setX(bullet.getX());
-                            bulletRect.setY(bullet.getY());
-                        });
+                        Point zombieCenter = new Point(zombie.getX() + (playerWidth / 2), zombie.getY() + (playerHeight / 2));
 
-                        // Check for wall collisions
-                        Corners bulletCorners = new Corners(bulletCenter, bullet.getTheta(), bulletWidth, bulletHeight);
-                        ArrayList<Point> bulletEdges = getEdgePoints(bulletCorners);
-                        if(checkForBulletCollision(bulletEdges, bulletCorners, bulletCenter)) {
+                        if(zombiePath.size() > 1){
+                            try {
+                                int index = zombiePath.indexOf(graph.getVertex(getGridIdentity(zombieCenter.getX(), zombieCenter.getY())));
+
+                                if(index < 0) {
+                                    continue;
+                                }
+
+                                double yDifference = (((int)(zombiePath.get(index + 1).getIdentity() / gridWidth) * cellHeight) + cellHeight / 2) - (zombie.getY() + (playerHeight / 2));
+                                double xDifference = ((zombiePath.get(index + 1).getIdentity() % gridWidth * cellWidth) + cellWidth / 2) - (zombie.getX() + (playerWidth / 2)) ;
+
+                                zombie.setTheta(Math.atan2(yDifference , xDifference));
+
+                                double xZombieMove = zombie.getSpeed() * Math.cos(zombie.getTheta());
+                                double yZombieMove = zombie.getSpeed() * Math.sin(zombie.getTheta());
+
+                                Corners corners = new Corners(zombieCenter, zombie.getTheta(), playerWidth, playerHeight);
+                                ArrayList<Point> zombieEdges = getEdgePoints(corners);
+                                checkForWallCollisions(zombieEdges, corners, zombie, zombieCenter, xZombieMove, yZombieMove);
+                                zombie.translate(xZombieMove, yZombieMove);
+
+                                // Store corners of zombie to check for bullet collisions
+                                zombieCorners.put(zombie, new Corners(new Point(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), zombie.getTheta(), playerWidth, playerHeight));
+
+                            } catch(IndexOutOfBoundsException ex) {
+                                // Do nothing
+                            }
+                        } else {
+                            zombie.setTheta(Math.atan2(playerCenter.getY() - zombieCenter.getY(), playerCenter.getX() - zombieCenter.getX()));
+                            double xZombieMove = zombie.getSpeed() * Math.cos(zombie.getTheta());
+                            double yZombieMove = zombie.getSpeed() * Math.sin(zombie.getTheta());
+                            zombie.translate(xZombieMove, yZombieMove);
+                        }
+
+                        Platform.runLater(() -> {
+                            try {
+                                Rectangle zombieRect = zombieRectangleList.get(zombieList.indexOf(zombie));
+
+                                zombieRect.setX(zombie.getX());
+                                zombieRect.setY(zombie.getY());
+                                zombieRect.setRotate(getDegrees(zombie.getTheta()));
+                            } catch(ArrayIndexOutOfBoundsException ex) {
+                                // Do nothing
+                            }
+                        });
+                    }
+                }
+            }
+        };
+        zombieMoveTimer.scheduleAtFixedRate(zombieMoveTask, 0, 15);
+        
+        TimerTask bulletMoveTask = new TimerTask(){
+            @Override
+            public void run() {
+                if(!pauseGame) {
+                    // Move bullets
+                    for(Weapon weapon : player.getWeapons()) {
+                        for(int i = weapon.getBullets().size() - 1; i >= 0; i--) {
+                            Bullet bullet = weapon.getBullets().get(i);
+
+                            if(bullet == null) {
+                                continue;
+                            }
+
+                            bullet.move();
+
+                            Point bulletCenter = new Point(bullet.getX() + (bulletWidth / 2), bullet.getY() + (bulletHeight / 2));
+
+                            Rectangle bulletRect = bullets.get(bullet);
+
+                            if(bulletRect == null) {
+                                continue;
+                            }
+
                             Platform.runLater(() -> {
-                                anchorPane.getChildren().remove(bulletRect);
+                                bulletRect.setX(bullet.getX());
+                                bulletRect.setY(bullet.getY());
                             });
-                            bullets.remove(bullet.destroy());
+
+                            // Check for wall collisions
+                            Corners bulletCorners = new Corners(bulletCenter, bullet.getTheta(), bulletWidth, bulletHeight);
+                            ArrayList<Point> bulletEdges = getEdgePoints(bulletCorners);
+                            if(checkForBulletCollision(bulletEdges, bulletCorners, bulletCenter)) {
+                                Platform.runLater(() -> {
+                                    anchorPane.getChildren().remove(bulletRect);
+                                });
+                                bullets.remove(bullet.destroy());
+                            }
                         }
                     }
                 }
@@ -472,19 +584,25 @@ public class ZombiesFXMLController implements Initializable {
             
             Point zombieCenter = new Point(zombie.getX() + (playerWidth / 2), zombie.getY() + (playerHeight / 2));
             
-            if(overlaps(corners, center, zombieCorner, zombieCenter)) {
-                zombieCount--;
-                Platform.runLater(() -> {
-                    try {
-                        int index = zombieList.indexOf(zombie);
-                        zombieList.remove(index);
-                        Rectangle rect = zombieRectangleList.remove(index);
-                        anchorPane.getChildren().remove(rect);
-                    } catch(ArrayIndexOutOfBoundsException ex) {
-                        // Do nothing
-                    }
-                });
-                return true;
+            if(getDistance(center, zombieCenter) <= Math.sqrt(Math.pow(bulletWidth / 2, 2) + Math.pow(bulletHeight / 2, 2)) + Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2))) {
+                if(overlaps(corners, center, zombieCorner, zombieCenter)) {
+                    zombieCount--;
+                    killCount++;
+
+                    Platform.runLater(() -> {
+                        killText.setText("Kills: " + killCount);
+
+                        try {
+                            int index = zombieList.indexOf(zombie);
+                            zombieList.remove(index);
+                            Rectangle rect = zombieRectangleList.remove(index);
+                            anchorPane.getChildren().remove(rect);
+                        } catch(ArrayIndexOutOfBoundsException ex) {
+                            // Do nothing
+                        }
+                    });
+                    return true;
+                }
             }
         }
         
@@ -629,23 +747,32 @@ public class ZombiesFXMLController implements Initializable {
     private void setArrowValues(KeyCode keyCode, boolean bool) {
         switch(keyCode) {
             case LEFT:
+            case A:
                 if(left != bool) {
                     left = bool;
                 }
                 break;
             case RIGHT:
+            case D:
                 if(right != bool) {
                     right = bool;
                 }
                 break;
             case UP:
+            case W:
                 if(up != bool) {
                     up = bool;
                 }
                 break;
             case DOWN:
+            case S:
                 if(down != bool) {
                     down = bool;
+                }
+                break;
+            case SPACE:
+                if(spaceBar != bool) {
+                    spaceBar = bool;
                 }
                 break;
         }
@@ -660,6 +787,7 @@ public class ZombiesFXMLController implements Initializable {
         movementTimer.cancel();
         dijkstraTimer.cancel();
         bulletMoveTimer.cancel();
+        zombieMoveTimer.cancel();
     }
     
     // Add listeners to the scene
