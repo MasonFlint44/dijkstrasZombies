@@ -9,18 +9,13 @@ import graph.Graph;
 import graph.Vertex;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Hashtable;
+import java.util.HashMap;
 import java.util.ResourceBundle;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.geometry.Bounds;
 import javafx.scene.Scene;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.AnchorPane;
@@ -37,6 +32,10 @@ public class ZombiesFXMLController implements Initializable {
     // Mouse coordinates
     private double mouseX;
     private double mouseY;
+    
+    // Mouse click properties
+    private boolean click = false;
+    private int clickCount = 0;
    
     // Key pressed values
     private boolean left = false;
@@ -45,67 +44,64 @@ public class ZombiesFXMLController implements Initializable {
     private boolean down = false;
     private boolean spaceBar = false;
     
-    // Click and number of clicks
-    private boolean click = false;
-    private int clickCount = 0;
-    
     // Player values
+    private final Character player = new Character();
     private final double playerWidth = 9;
     private final double playerHeight = 9;
     private final Color playerColor = Color.RED;
-    
-    // Bullet values
-    private final double bulletWidth = 5;
-    private final double bulletHeight = 4;
-    private final Color bulletColor = Color.BLACK;
-    private final double offset = (playerWidth / 2) + (bulletWidth / 2);
-    private final double centerWidth = (playerWidth / 2) + (bulletWidth / 2);
-    private final double centerHeight = (playerHeight / 2) - (bulletHeight / 2);
-    
-    // Movement values
-    private final Timer movementTimer = new Timer("MovementTimer");
-    private int fireCounter = 0;
-    
-    // Player rectangle values
+    private final int playerHealth = 100;
+    private final double playerSpeed = 1.5;
+    private int killCount = 0;
     private Rectangle playerRect;
-    private final Character player = new Character();
-    private final Hashtable<Bullet, Rectangle> bullets = new Hashtable<>();
     private Point playerCenter;
     private Vertex playerVertex;
     
+    // Bullet values
+    private final double bulletWidth = 4;
+    private final double bulletHeight = 4;
+    private final Color bulletColor = Color.BLACK;
+//    private final double offset = (playerWidth / 2) + (bulletWidth / 2);
+//    private final double centerWidth = (playerWidth / 2) + (bulletWidth / 2);
+//    private final double centerHeight = (playerHeight / 2) - (bulletHeight / 2);
+    
+    // Timers
+    private final Timer movementTimer = new Timer("MovementTimer");
+    private final Timer bulletMoveTimer = new Timer("BulletMove");
+    private final Timer zombieMoveTimer = new Timer("ZombieMove");
+    private final Timer dijkstraTimer = new Timer("DijkstraTimer");
+    
     // Grid values
+    private final Graph graph;
     private final int gridWidth = 50;
     private final int gridHeight = 50;
     private double cellWidth;
     private double cellHeight;
-    private final Graph graph;
     
     // Zombie values
-    private int zombieSpawnCounter = 0;
     private final int zombieSpawnRate = 30;
-    private int zombieCount = 0;
     private final int zombieMaxCount = 100;
-    private int killCount = 0;
-    
     private final double zombieSpeed = 1;
     private final int zombieHealth = 1;
     
+    // Collections
     private final ArrayList<Character> zombieList = new ArrayList<>();
-    private final ArrayList<Rectangle> zombieRectangleList = new ArrayList<>();
+    private final HashMap<Bullet, Rectangle> bullets = new HashMap<>();
+    private final HashMap<Character, Rectangle> zombies = new HashMap<>();
+    private final HashMap<Character, ArrayList<Vertex>> dijkstraPaths = new HashMap<>();
+    private final HashMap<Character, Corners> zombieCorners = new HashMap<>();
     
-    private final Timer dijkstraTimer = new Timer("DijkstraTimer");
-    private final Hashtable<Character, ArrayList<Vertex>> dijkstraPaths = new Hashtable<>();
+    // Rate counters
+    private int fireCounter = 0;
+    private int zombieSpawnCounter = 0;
     
-    private final Hashtable<Character, Corners> zombieCorners = new Hashtable<>();
-    
+    // Scene properties
     private final double sceneWidth = 500;
     private final double sceneHeight = 500;
     
-    private final Timer bulletMoveTimer = new Timer("BulletMove");
-    private final Timer zombieMoveTimer = new Timer("ZombieMove");
-    
+    // Flags
     private volatile boolean pauseGame = false;
     
+    // UI Elements
     @FXML
     private AnchorPane anchorPane;
     @FXML
@@ -118,10 +114,12 @@ public class ZombiesFXMLController implements Initializable {
     private Text pauseText;
     
     public ZombiesFXMLController() {
-        player.setHealth(100);
-        player.setSpeed(1.5);
+        // Build player
+        player.setHealth(playerHealth);
+        player.setSpeed(playerSpeed);
         player.wield(new Weapon(1, 7, 15));
         
+        // Construct graph
         graph = new Graph(gridWidth * gridHeight);
         gridify(graph, gridWidth, gridHeight);
     }
@@ -136,6 +134,7 @@ public class ZombiesFXMLController implements Initializable {
         cellWidth = sceneWidth / gridWidth;
         cellHeight = sceneHeight / gridHeight;
         
+        // Build walls
         // Top wall
         for(int i  = 408; i <= 441; i++) {
             graph.disconnect(i);
@@ -204,6 +203,7 @@ public class ZombiesFXMLController implements Initializable {
             }
         }
         
+        // Set up UI
         Platform.runLater(() -> {
             pauseText.setVisible(false);
             healthText.setText("Health: " + player.getHealth());
@@ -239,6 +239,7 @@ public class ZombiesFXMLController implements Initializable {
             click = false;
         });
         
+        // Calculate paths of zombies
         TimerTask dijkstraTask = new TimerTask() {
             @Override
             public void run() {
@@ -260,71 +261,6 @@ public class ZombiesFXMLController implements Initializable {
                 if(!pauseGame) {
                     // Calculate degrees of rotation
                     player.setTheta(Math.atan2(mouseY - (player.getY() + (playerHeight / 2)), mouseX - (player.getX() + (playerWidth / 2))));
-
-                    // Fire bullets
-                    if(fireCounter++ >= player.getWeapon().getFireRate()) {
-                        fireCounter = 0;
-
-                        if(click || clickCount > 0) {
-                            clickCount = 0;
-
-                            Bullet bullet = player.fireWeapon();
-    //                        bullet.setX((player.getX() + centerWidth) + (offset * Math.cos(player.getTheta())));
-    //                        bullet.setY((player.getY() + centerHeight) + (offset * Math.sin(player.getTheta())));
-                            bullet.setX(player.getX() + (playerWidth / 2) - (bulletWidth / 2));
-                            bullet.setY(player.getY() + (playerHeight / 2) - (bulletWidth / 2));
-
-                            Platform.runLater(() -> {
-                                Rectangle bulletRect = new Rectangle(bullet.getX(), bullet.getY() , bulletWidth, bulletHeight);
-                                bulletRect.setFill(bulletColor);
-                                bulletRect.setRotate(getDegrees(bullet.getTheta()));
-
-                                bullets.put(bullet, bulletRect);
-                                anchorPane.getChildren().add(bulletRect);
-                            });
-                        }
-                    }
-
-                    // Spawn zombies
-                    if (zombieSpawnCounter++  >= zombieSpawnRate && zombieCount < zombieMaxCount) {
-                        zombieSpawnCounter = 0;
-                        zombieCount += 1;
-
-                        Character zombieInstance = new Character();
-                        zombieInstance.setHealth(zombieHealth);
-                        zombieInstance.setSpeed(zombieSpeed);
-
-                        double random = Math.random();
-                        // Top edge
-                        if(random < 0.25) {
-                            zombieInstance.setX(Math.random() * (sceneWidth - playerWidth));
-                            zombieInstance.setY(0);
-                        } 
-                        // Right edge
-                        else if(random < 0.5) {
-                            zombieInstance.setX(sceneWidth - playerWidth);
-                            zombieInstance.setY(Math.random() * (sceneHeight - playerHeight));
-                        }
-                        // Bottom edge
-                        else if(random < 0.75) {
-                            zombieInstance.setX(Math.random() * (sceneWidth - playerWidth));
-                            zombieInstance.setY(sceneHeight - playerHeight);
-                        }
-                        // Left edge
-                        else {
-                            zombieInstance.setX(0);
-                            zombieInstance.setY(Math.random() * (sceneHeight - playerHeight));
-                        }
-
-                        Platform.runLater(() -> {
-                            Rectangle zombieRectangle = new Rectangle(zombieInstance.getX(), zombieInstance.getY(), playerWidth, playerHeight);
-                            zombieRectangle.setFill(Color.GREEN);
-                            anchorPane.getChildren().add(zombieRectangle);
-
-                            zombieList.add(zombieInstance);
-                            zombieRectangleList.add(zombieRectangle);
-                        });
-                    }
 
                     // Get center of player
                     playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
@@ -381,7 +317,7 @@ public class ZombiesFXMLController implements Initializable {
                         playerRect.setX(player.getX());
                         playerRect.setY(player.getY());
                     });
-
+                    
                     playerCenter = new Point(player.getX() + (playerWidth / 2), player.getY() + (playerHeight / 2));
                     playerCorners = new Corners(playerCenter, player.getTheta(), playerWidth, playerHeight);
 
@@ -399,7 +335,7 @@ public class ZombiesFXMLController implements Initializable {
                         if(getDistance(playerCenter, zombieCenter) <= 2 * Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2))) {
                             if(overlaps(playerCorners, playerCenter, zombieCorner, zombieCenter)) {
                                 if(player.getHealth() > 0) {
-                                    player.setHealth(player.getHealth() - 1);
+                                    player.setHealth(player.getHealth() - zombie.getWeapon().getDamage());
 
                                     Platform.runLater(() -> {
                                         healthText.setText("Health: " + player.getHealth());
@@ -414,15 +350,16 @@ public class ZombiesFXMLController implements Initializable {
 
                     // Used for zombies to track player
                     playerVertex = graph.getVertex(getGridIdentity(playerCenter.getX() + xMovement, playerCenter.getY() + yMovement));
+                    
                 } else {
                     if(spaceBar) {
+                        //Reset game
                         Platform.runLater(() -> {
                             for(Character resetZombie: zombieList) {
-                                anchorPane.getChildren().remove(zombieRectangleList.get(zombieList.indexOf(resetZombie)));
+                                anchorPane.getChildren().remove(zombies.get(resetZombie));
                             }
                             zombieList.clear();
-                            zombieRectangleList.clear();
-                            zombieCount = 0;
+                            zombies.clear();
 
                             killCount = 0;
                             killText.setText("Kills: " + killCount);
@@ -462,6 +399,50 @@ public class ZombiesFXMLController implements Initializable {
             @Override
             public void run() {
                 if(!pauseGame) {
+                    // Spawn zombies
+                    if (zombieSpawnCounter++  >= zombieSpawnRate && zombieList.size() < zombieMaxCount) {
+                        zombieSpawnCounter = 0;
+
+                        Character zombie = new Character();
+                        zombie.setHealth(zombieHealth);
+                        zombie.setSpeed(zombieSpeed);
+                        zombie.wield(new Weapon(1, 0, 0));
+
+                        // Randomly spawn zombie along edge of screen
+                        double random = Math.random();
+                        
+                        // Top edge
+                        if(random < 0.25) {
+                            zombie.setX(Math.random() * (sceneWidth - playerWidth));
+                            zombie.setY(0);
+                        } 
+                        // Right edge
+                        else if(random < 0.5) {
+                            zombie.setX(sceneWidth - playerWidth);
+                            zombie.setY(Math.random() * (sceneHeight - playerHeight));
+                        }
+                        // Bottom edge
+                        else if(random < 0.75) {
+                            zombie.setX(Math.random() * (sceneWidth - playerWidth));
+                            zombie.setY(sceneHeight - playerHeight);
+                        }
+                        // Left edge
+                        else {
+                            zombie.setX(0);
+                            zombie.setY(Math.random() * (sceneHeight - playerHeight));
+                        }
+
+                        Platform.runLater(() -> {
+                            Rectangle zombieRect = new Rectangle(zombie.getX(), zombie.getY(), playerWidth, playerHeight);
+                            zombieRect.setFill(Color.GREEN);
+                            anchorPane.getChildren().add(zombieRect);
+
+                            zombieList.add(zombie);
+                            zombies.put(zombie, zombieRect);
+                        });
+                    }
+                    
+                    // Move zombies
                     for(int i = 0; i < zombieList.size(); i++) {
                         Character zombie = zombieList.get(i);
 
@@ -508,12 +489,12 @@ public class ZombiesFXMLController implements Initializable {
 
                         Platform.runLater(() -> {
                             try {
-                                Rectangle zombieRect = zombieRectangleList.get(zombieList.indexOf(zombie));
+                                Rectangle zombieRect = zombies.get(zombie);
 
                                 zombieRect.setX(zombie.getX());
                                 zombieRect.setY(zombie.getY());
                                 zombieRect.setRotate(getDegrees(zombie.getTheta()));
-                            } catch(ArrayIndexOutOfBoundsException ex) {
+                            } catch(NullPointerException ex) {
                                 // Do nothing
                             }
                         });
@@ -527,6 +508,30 @@ public class ZombiesFXMLController implements Initializable {
             @Override
             public void run() {
                 if(!pauseGame) {
+                    // Fire bullets
+                    if(fireCounter++ >= player.getWeapon().getFireRate()) {
+                        fireCounter = 0;
+
+                        if(click || clickCount > 0) {
+                            clickCount = 0;
+
+                            Bullet bullet = player.fireWeapon();
+//                            bullet.setX((player.getX() + centerWidth) + (offset * Math.cos(player.getTheta())));
+//                            bullet.setY((player.getY() + centerHeight) + (offset * Math.sin(player.getTheta())));
+                            bullet.setX(player.getX() + (playerWidth / 2) - (bulletWidth / 2));
+                            bullet.setY(player.getY() + (playerHeight / 2) - (bulletWidth / 2));
+
+                            Platform.runLater(() -> {
+                                Rectangle bulletRect = new Rectangle(bullet.getX(), bullet.getY() , bulletWidth, bulletHeight);
+                                bulletRect.setFill(bulletColor);
+                                bulletRect.setRotate(getDegrees(bullet.getTheta()));
+
+                                bullets.put(bullet, bulletRect);
+                                anchorPane.getChildren().add(bulletRect);
+                            });
+                        }
+                    }
+                    
                     // Move bullets
                     for(Weapon weapon : player.getWeapons()) {
                         for(int i = weapon.getBullets().size() - 1; i >= 0; i--) {
@@ -586,16 +591,14 @@ public class ZombiesFXMLController implements Initializable {
             
             if(getDistance(center, zombieCenter) <= Math.sqrt(Math.pow(bulletWidth / 2, 2) + Math.pow(bulletHeight / 2, 2)) + Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2))) {
                 if(overlaps(corners, center, zombieCorner, zombieCenter)) {
-                    zombieCount--;
                     killCount++;
 
                     Platform.runLater(() -> {
                         killText.setText("Kills: " + killCount);
 
                         try {
-                            int index = zombieList.indexOf(zombie);
-                            zombieList.remove(index);
-                            Rectangle rect = zombieRectangleList.remove(index);
+                            zombieList.remove(zombie);
+                            Rectangle rect = zombies.remove(zombie);
                             anchorPane.getChildren().remove(rect);
                         } catch(ArrayIndexOutOfBoundsException ex) {
                             // Do nothing

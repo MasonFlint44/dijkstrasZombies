@@ -7,7 +7,7 @@ package graph;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Hashtable;
+import java.util.HashMap;
 
 /**
  *
@@ -162,7 +162,7 @@ public class Graph {
         boolean settled[] = new boolean[getVertexCount()];
         double distance[] = new double[getVertexCount()];
         Arrays.fill(distance, Double.POSITIVE_INFINITY);
-        Hashtable<Vertex, Vertex> previous = new Hashtable<>();
+        HashMap<Vertex, Vertex> previous = new HashMap<>();
         ArrayList<Vertex> unsettled = new ArrayList<>();
         
         distance[start.getIdentity()] = 0;

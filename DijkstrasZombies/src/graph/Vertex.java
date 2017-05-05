@@ -6,7 +6,7 @@
 package graph;
 
 import java.util.ArrayList;
-import java.util.Hashtable;
+import java.util.HashMap;
 
 /**
  *
@@ -15,8 +15,8 @@ import java.util.Hashtable;
 public class Vertex {
     // Edges represented by adjacency list
     private final ArrayList<Vertex> neighbors = new ArrayList<>();
-    // Distances to each neighboring vertex stored in hashtable
-    private final Hashtable<Vertex, Double> distances = new Hashtable<>();
+    // Distances to each neighboring vertex stored in hashmap
+    private final HashMap<Vertex, Double> distances = new HashMap<>();
     // Each vertex in a graph will have a unique identifier
     private final Integer identifier;
     
@@ -94,7 +94,7 @@ public class Vertex {
         return neighbors;
     }
     
-    public Hashtable<Vertex, Double> getDistances() {
+    public HashMap<Vertex, Double> getDistances() {
         return distances;
     }
     
