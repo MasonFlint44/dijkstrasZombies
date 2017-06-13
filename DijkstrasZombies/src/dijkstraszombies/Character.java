@@ -19,7 +19,8 @@ public class Character {
     private double theta;
     private double speed;
     private Weapon weapon;
-    private final ArrayList<Weapon> weapons = new ArrayList<>(1);
+    private ArrayList<Weapon> weapons = new ArrayList<>(1);
+    private double armorPercentage = 0.0;
     
     public int getHealth() {
         return health;
@@ -30,6 +31,20 @@ public class Character {
             maxHealth = health;
         }
         this.health = health;
+        healthChanged(health);
+    }
+    
+    public void damage(int damage) {
+       health -= damage * (1 - (armorPercentage / 100));
+       healthChanged(health);
+    }
+    
+    public double getArmorPercentage() {
+        return armorPercentage;
+    }
+    
+    public void setArmorPercentage(double armor) {
+        armorPercentage = armor;
     }
     
     public int getMaxHealth() {
@@ -112,5 +127,13 @@ public class Character {
     
     public ArrayList<Weapon> getWeapons() {
         return weapons;
+    }
+    
+    public void setWeapons(ArrayList<Weapon> weapons) {
+        this.weapons = weapons;
+    }
+    
+    public void healthChanged(double health) {
+        
     }
 }

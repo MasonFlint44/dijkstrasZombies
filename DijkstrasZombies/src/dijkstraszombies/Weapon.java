@@ -12,12 +12,13 @@ import java.util.ArrayList;
  * @author mason
  */
 public class Weapon {
-    private final int damage;
+    private int damage;
     private final double bulletSpeed;
     private final Integer maxAmmo;
     private int ammoCount = 0;
-    private final int fireRate;
+    private int fireRate;
     private ArrayList<Bullet> bullets = new ArrayList<>();
+    private double fireRatePercentage = 100;
     
     public Weapon(int damage, double bulletSpeed, int fireRate) {
         this(damage, bulletSpeed, fireRate,null);
@@ -53,7 +54,11 @@ public class Weapon {
     }
     
     public int getFireRate() {
-        return fireRate;
+        return (int)Math.floor(fireRate / (fireRatePercentage / 100));
+    }
+    
+    public void setFireRatePercentage(double fireRatePercentage) {
+        this.fireRatePercentage = fireRatePercentage;
     }
     
     public void fireBullet(Bullet bullet) {
@@ -67,5 +72,13 @@ public class Weapon {
     
     public ArrayList<Bullet> getBullets() {
         return bullets;
+    }
+    
+    public void setDamage(int damage) {
+        this.damage = damage;
+    }
+    
+    public void setFireRate(int fireRate) {
+        this.fireRate = fireRate;
     }
 }

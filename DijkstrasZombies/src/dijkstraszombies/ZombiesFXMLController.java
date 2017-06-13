@@ -45,7 +45,14 @@ public class ZombiesFXMLController implements Initializable {
     private boolean spaceBar = false;
     
     // Player values
-    private final Character player = new Character();
+    private final Character player = new Character() {
+        @Override
+        public void healthChanged(double health) {
+            Platform.runLater(() -> {
+                healthText.setText("Health: " + player.getHealth());
+            });
+        }
+    };
     private final double playerWidth = 9;
     private final double playerHeight = 9;
     private final Color playerColor = Color.RED;
@@ -64,11 +71,16 @@ public class ZombiesFXMLController implements Initializable {
 //    private final double centerWidth = (playerWidth / 2) + (bulletWidth / 2);
 //    private final double centerHeight = (playerHeight / 2) - (bulletHeight / 2);
     
+    // Powerup values
+    private final int powerupSpawnRate = 1200;
+    private int powerupSpawnCounter = 0;
+    
     // Timers
     private final Timer movementTimer = new Timer("MovementTimer");
     private final Timer bulletMoveTimer = new Timer("BulletMove");
     private final Timer zombieMoveTimer = new Timer("ZombieMove");
     private final Timer dijkstraTimer = new Timer("DijkstraTimer");
+    private final Timer powerupTimer = new Timer("PowerupTimer");
     
     // Grid values
     private final Graph graph;
@@ -89,6 +101,8 @@ public class ZombiesFXMLController implements Initializable {
     private final HashMap<Character, Rectangle> zombies = new HashMap<>();
     private final HashMap<Character, ArrayList<Vertex>> dijkstraPaths = new HashMap<>();
     private final HashMap<Character, Corners> zombieCorners = new HashMap<>();
+    private final ArrayList<Powerup> powerupList = new ArrayList<>();
+    private final HashMap<Powerup, Rectangle> powerups = new HashMap<>();
     
     // Rate counters
     private int fireCounter = 0;
@@ -206,7 +220,6 @@ public class ZombiesFXMLController implements Initializable {
         // Set up UI
         Platform.runLater(() -> {
             pauseText.setVisible(false);
-            healthText.setText("Health: " + player.getHealth());
             killText.setText("Kills: " + killCount);
             
             player.setX((sceneWidth / 2) - (playerWidth / 2));
@@ -335,15 +348,34 @@ public class ZombiesFXMLController implements Initializable {
                         if(getDistance(playerCenter, zombieCenter) <= 2 * Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2))) {
                             if(overlaps(playerCorners, playerCenter, zombieCorner, zombieCenter)) {
                                 if(player.getHealth() > 0) {
-                                    player.setHealth(player.getHealth() - zombie.getWeapon().getDamage());
-
-                                    Platform.runLater(() -> {
-                                        healthText.setText("Health: " + player.getHealth());
-                                    });
+                                    player.damage(zombie.getWeapon().getDamage());
                                 } else {
                                     pauseGame = true;
                                     pauseText.setVisible(true);
                                 }
+                            }
+                        }
+                    }
+                    
+                    // Check for collisions with powerups
+                    for(int i = 0; i < powerupList.size(); i++) {
+                        Powerup powerup = powerupList.get(i);
+                        Point powerupCenter = new Point(powerup.getX() + playerWidth / 2, powerup.getY() + playerHeight / 2);
+                        Corners powerupCorners = new Corners(powerupCenter, 0, playerWidth, playerHeight);
+                        
+                        if(getDistance(playerCenter, powerupCenter) <= 2 * Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2))) {
+                            if(overlaps(playerCorners, playerCenter, powerupCorners, powerupCenter)) {
+                                powerup.power();
+                                powerupList.remove(powerup);
+                                
+                                Platform.runLater(() -> {
+                                    Rectangle powerupRect = powerups.remove(powerup);
+                                    try {
+                                        anchorPane.getChildren().remove(powerupRect);
+                                    } catch(Exception e) {
+                                        // Do nothing
+                                    }
+                                });
                             }
                         }
                     }
@@ -370,9 +402,17 @@ public class ZombiesFXMLController implements Initializable {
                                 }
                                 weapon.getBullets().clear();
                             }
+                            
+                            for(Powerup powerup : powerupList) {
+                                anchorPane.getChildren().remove(powerups.get(powerup));
+                                powerup.dispose();
+                            }
+                            powerups.clear();
+                            powerupList.clear();
 
                             dijkstraPaths.clear();
 
+                            player.setMaxHealth(100);
                             player.setHealth(player.getMaxHealth());
                             healthText.setText("Health: " + player.getHealth());
 
@@ -572,6 +612,73 @@ public class ZombiesFXMLController implements Initializable {
         };
         bulletMoveTimer.scheduleAtFixedRate(bulletMoveTask, 0, 15);
         
+        TimerTask powerupTask = new TimerTask() {
+            @Override
+            public void run() {
+                for(int i = 0; i < powerupList.size(); i++) {
+                    Powerup powerup = powerupList.get(i);
+                    powerup.setTheta(powerup.getTheta() + .05236);
+                    
+                    Platform.runLater(() -> {
+                        try {
+                            powerups.get(powerup).setRotate(getDegrees(powerup.getTheta()));
+                        } catch(Exception e) {
+                            // Do nothing
+                        }
+                    });
+                }
+                
+                if(pauseGame) {
+                    return;
+                }
+
+                if(powerupSpawnCounter++ < powerupSpawnRate) {
+                    return;
+                }
+                
+                // Generate powerup
+                powerupSpawnCounter = 0;
+                
+                double random = Math.random();
+                Powerup powerup;
+                if(random < 0.5) {
+                    powerup = new FiercePowerup(player);
+                } else {
+                    powerup = new HealthPowerup(player);
+                }
+                
+                powerupList.add(powerup);
+                
+                // Ensure powerup is not on a wall
+                double x;
+                double y;
+                do {
+                    x = Math.random() * (sceneWidth - playerWidth);
+                    y = Math.random() * (sceneHeight - playerHeight);
+                } while(graph.getVertex(getGridIdentity(x + playerWidth / 2, y + playerHeight / 2)).getNeighborCount() == 0);
+
+                powerup.setX(x);
+                powerup.setY(y);
+
+                Platform.runLater(() -> {
+                    Rectangle powerupRect = new Rectangle(powerup.getX(), powerup.getY(), playerWidth, playerHeight);
+                    powerupRect.setFill(powerup.getColor());
+
+                    powerups.put(powerup, powerupRect);
+                    anchorPane.getChildren().add(powerupRect);
+                    
+                    powerup.addTimeoutListener(() -> {
+                        powerupList.remove(powerup);
+                        
+                        Platform.runLater(() -> {
+                            anchorPane.getChildren().remove(powerups.remove(powerup));
+                        });
+                    });
+                });
+            }
+        };
+        powerupTimer.scheduleAtFixedRate(powerupTask, 0, 15);
+        
         Platform.runLater(() -> {
             anchorPane.getChildren().add(playerRect);
         });
@@ -591,20 +698,24 @@ public class ZombiesFXMLController implements Initializable {
             
             if(getDistance(center, zombieCenter) <= Math.sqrt(Math.pow(bulletWidth / 2, 2) + Math.pow(bulletHeight / 2, 2)) + Math.sqrt(Math.pow(playerWidth / 2, 2) + Math.pow(playerHeight / 2, 2))) {
                 if(overlaps(corners, center, zombieCorner, zombieCenter)) {
-                    killCount++;
+                    zombie.damage(player.getWeapon().getDamage());
+                    
+                    if(zombie.getHealth() <= 0) {
+                        killCount++;
 
-                    Platform.runLater(() -> {
-                        killText.setText("Kills: " + killCount);
+                        Platform.runLater(() -> {
+                            killText.setText("Kills: " + killCount);
 
-                        try {
-                            zombieList.remove(zombie);
-                            Rectangle rect = zombies.remove(zombie);
-                            anchorPane.getChildren().remove(rect);
-                        } catch(ArrayIndexOutOfBoundsException ex) {
-                            // Do nothing
-                        }
-                    });
-                    return true;
+                            try {
+                                zombieList.remove(zombie);
+                                Rectangle rect = zombies.remove(zombie);
+                                anchorPane.getChildren().remove(rect);
+                            } catch(ArrayIndexOutOfBoundsException ex) {
+                                // Do nothing
+                            }
+                        });
+                        return true;
+                    }
                 }
             }
         }
@@ -791,6 +902,10 @@ public class ZombiesFXMLController implements Initializable {
         dijkstraTimer.cancel();
         bulletMoveTimer.cancel();
         zombieMoveTimer.cancel();
+        powerupTimer.cancel();
+        for(Powerup powerup : powerupList) {
+            powerup.dispose();
+        }
     }
     
     // Add listeners to the scene
