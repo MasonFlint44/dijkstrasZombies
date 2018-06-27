@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.ResourceBundle;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -79,7 +81,7 @@ public class ZombiesFXMLController implements Initializable {
     private final Timer movementTimer = new Timer("MovementTimer");
     private final Timer bulletMoveTimer = new Timer("BulletMove");
     private final Timer zombieMoveTimer = new Timer("ZombieMove");
-    private final Timer dijkstraTimer = new Timer("DijkstraTimer");
+    private Thread dijkstraTask;
     private final Timer powerupTimer = new Timer("PowerupTimer");
     
     // Grid values
@@ -99,7 +101,7 @@ public class ZombiesFXMLController implements Initializable {
     private final ArrayList<Character> zombieList = new ArrayList<>();
     private final HashMap<Bullet, Rectangle> bullets = new HashMap<>();
     private final HashMap<Character, Rectangle> zombies = new HashMap<>();
-    private final HashMap<Character, ArrayList<Vertex>> dijkstraPaths = new HashMap<>();
+    private HashMap<Vertex, Double> dijkstraDistances = new HashMap<>();
     private final HashMap<Character, Corners> zombieCorners = new HashMap<>();
     private final ArrayList<Powerup> powerupList = new ArrayList<>();
     private final HashMap<Powerup, Rectangle> powerups = new HashMap<>();
@@ -253,19 +255,21 @@ public class ZombiesFXMLController implements Initializable {
         });
         
         // Calculate paths of zombies
-        TimerTask dijkstraTask = new TimerTask() {
+        dijkstraTask = new Thread() {
             @Override
             public void run() {
-                if(!pauseGame) {
-                    for(int i = 0; i < zombieList.size(); i++) {
-                        Character zombie = zombieList.get(i);
-                        ArrayList<Vertex> zombiePath = graph.dijkstras(getGridIdentity(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), playerVertex.getIdentity());
-                        dijkstraPaths.put(zombie, zombiePath);
+                while(!isInterrupted()) {
+                    if(!pauseGame) {
+                        for(int i = 0; i < zombieList.size(); i++) {
+                            Character zombie = zombieList.get(i);
+                            dijkstraDistances = graph.dijkstras(playerVertex);
+                        }
                     }
                 }
             }
         };
-        dijkstraTimer.scheduleAtFixedRate(dijkstraTask, 0, 15);
+        dijkstraTask.setName("DijkstraTask");
+        dijkstraTask.start();
         
         // Move player
         TimerTask movementTask = new TimerTask() {
@@ -409,8 +413,9 @@ public class ZombiesFXMLController implements Initializable {
                             }
                             powerups.clear();
                             powerupList.clear();
+                            powerupSpawnCounter = 0;
 
-                            dijkstraPaths.clear();
+                            dijkstraDistances.clear();
 
                             player.setMaxHealth(100);
                             player.setHealth(player.getMaxHealth());
@@ -486,26 +491,18 @@ public class ZombiesFXMLController implements Initializable {
                     for(int i = 0; i < zombieList.size(); i++) {
                         Character zombie = zombieList.get(i);
 
-                        ArrayList<Vertex> zombiePath = dijkstraPaths.get(zombie);
-                        if(zombiePath == null) {
-                            continue;
-                        }
-
                         Point zombieCenter = new Point(zombie.getX() + (playerWidth / 2), zombie.getY() + (playerHeight / 2));
+                        Vertex zombieVertex = graph.getVertex(getGridIdentity(zombieCenter));
+                        
+                        try {
+                            if(dijkstraDistances.get(zombieVertex) != 0) {
+                                Vertex direction = graph.getMinDistance(zombieVertex.getNeighbors(), dijkstraDistances);
 
-                        if(zombiePath.size() > 1){
-                            try {
-                                int index = zombiePath.indexOf(graph.getVertex(getGridIdentity(zombieCenter.getX(), zombieCenter.getY())));
-
-                                if(index < 0) {
-                                    continue;
-                                }
-
-                                double yDifference = (((int)(zombiePath.get(index + 1).getIdentity() / gridWidth) * cellHeight) + cellHeight / 2) - (zombie.getY() + (playerHeight / 2));
-                                double xDifference = ((zombiePath.get(index + 1).getIdentity() % gridWidth * cellWidth) + cellWidth / 2) - (zombie.getX() + (playerWidth / 2)) ;
+                                double yDifference = (((direction.getIdentity() / gridWidth) * cellHeight) + (cellHeight / 2)) - (zombie.getY() + (playerHeight / 2));
+                                double xDifference = (((direction.getIdentity() % gridWidth) * cellWidth) + (cellWidth / 2)) - (zombie.getX() + (playerWidth / 2));
 
                                 zombie.setTheta(Math.atan2(yDifference , xDifference));
-
+                                
                                 double xZombieMove = zombie.getSpeed() * Math.cos(zombie.getTheta());
                                 double yZombieMove = zombie.getSpeed() * Math.sin(zombie.getTheta());
 
@@ -516,15 +513,15 @@ public class ZombiesFXMLController implements Initializable {
 
                                 // Store corners of zombie to check for bullet collisions
                                 zombieCorners.put(zombie, new Corners(new Point(zombie.getX() + playerWidth / 2, zombie.getY() + playerHeight / 2), zombie.getTheta(), playerWidth, playerHeight));
-
-                            } catch(IndexOutOfBoundsException ex) {
-                                // Do nothing
+                            } else {
+                                zombie.setTheta(Math.atan2(playerCenter.getY() - zombieCenter.getY(), playerCenter.getX() - zombieCenter.getX()));
+                                double xZombieMove = zombie.getSpeed() * Math.cos(zombie.getTheta());
+                                double yZombieMove = zombie.getSpeed() * Math.sin(zombie.getTheta());
+                                zombie.translate(xZombieMove, yZombieMove);
                             }
-                        } else {
-                            zombie.setTheta(Math.atan2(playerCenter.getY() - zombieCenter.getY(), playerCenter.getX() - zombieCenter.getX()));
-                            double xZombieMove = zombie.getSpeed() * Math.cos(zombie.getTheta());
-                            double yZombieMove = zombie.getSpeed() * Math.sin(zombie.getTheta());
-                            zombie.translate(xZombieMove, yZombieMove);
+                            
+                        } catch(Exception ex) {
+                            // Do nothing
                         }
 
                         Platform.runLater(() -> {
@@ -899,7 +896,8 @@ public class ZombiesFXMLController implements Initializable {
     // Cancel timers - gets called on exit in main method
     public void dispose() {
         movementTimer.cancel();
-        dijkstraTimer.cancel();
+//        dijkstraTimer.cancel();
+        dijkstraTask.interrupt();
         bulletMoveTimer.cancel();
         zombieMoveTimer.cancel();
         powerupTimer.cancel();

@@ -149,56 +149,52 @@ public class Graph {
         return vertices;
     }
     
-    public ArrayList<Vertex> dijkstras(int start, int stop) {
-        return dijkstras(getVertex(start), getVertex(stop));
+//    public ArrayList<Vertex> dijkstras(int start, int stop) {
+//        return dijkstras(getVertex(start), getVertex(stop));
+//    }
+    
+    public HashMap<Vertex, Double> dijkstras(int start) {
+        return dijkstras(getVertex(start));
     }
     
-    // This is Dijkstra's algorithm modified to return a path of vertices from the start node to the stop node
-    public ArrayList<Vertex> dijkstras(Vertex start, Vertex stop) {
-        if(!vertices.contains(start) || !vertices.contains(stop)) {
+    
+    public HashMap<Vertex, Double> dijkstras(Vertex start) {
+        
+        if(!vertices.contains(start)) {
             return null;
         }
         
+        HashMap<Vertex, Double> distances = new HashMap<>();
         boolean settled[] = new boolean[getVertexCount()];
-        double distance[] = new double[getVertexCount()];
-        Arrays.fill(distance, Double.POSITIVE_INFINITY);
-        HashMap<Vertex, Vertex> previous = new HashMap<>();
         ArrayList<Vertex> unsettled = new ArrayList<>();
         
-        distance[start.getIdentity()] = 0;
+        distances.put(start, 0.0);
         unsettled.add(start);
         
         while(!unsettled.isEmpty()) {
-            Vertex vertex = getMinDistance(unsettled, distance);
+            Vertex vertex = getMinDistance(unsettled, distances);
             settled[vertex.getIdentity()] = true;
-            if(vertex.equals(stop)) {
-                break;
-            }
+
             unsettled.remove(vertex);
             
             for(Vertex neighbor : vertex.getNeighbors()) {
-                double alt = distance[vertex.getIdentity()] + neighbor.getDistance(vertex);
-                if(settled[neighbor.getIdentity()] == false && alt < distance[neighbor.getIdentity()]) {
-                    distance[neighbor.getIdentity()] = alt;
-                    previous.put(neighbor, vertex);
+                double alt = distances.getOrDefault(vertex, Double.POSITIVE_INFINITY) + neighbor.getDistance(vertex);
+
+                if(settled[neighbor.getIdentity()] == false && alt < distances.getOrDefault(neighbor, Double.POSITIVE_INFINITY)) {
+                    distances.put(neighbor, alt);
                     unsettled.add(neighbor);
                 }
             }
         }
-        
-        ArrayList<Vertex> path = new ArrayList<>();
-        Vertex prev = stop;
-        while(prev != null) {
-            path.add(0, prev);
-            prev = previous.get(prev);
-        }
-        return path;
+
+        return distances;
     }
     
-    private Vertex getMinDistance(ArrayList<Vertex> vertices, double[] distance) {
-        Vertex min = vertices.get(0);
-        for(Vertex vertex : vertices) {
-            if(distance[vertex.getIdentity()] < distance[min.getIdentity()]) {
+    // Return closest neighboring vertex
+    public Vertex getMinDistance(ArrayList<Vertex> neighbors, HashMap<Vertex, Double> distances) {
+        Vertex min = neighbors.get(0);
+        for(Vertex vertex : neighbors) {
+            if(distances.getOrDefault(vertex, Double.POSITIVE_INFINITY) < distances.getOrDefault(min, Double.POSITIVE_INFINITY)) {
                 min = vertex;
             }
         }

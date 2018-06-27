@@ -20,9 +20,9 @@ public abstract class Powerup {
     protected final Color color;
     protected final ArrayList<ChangeListener> timeoutListeners = new ArrayList<>();
     
-    private final Timer timeoutTimer = new Timer("TimeoutTimer");
+    private final Timer timeoutTimer;
     private final TimerTask timeoutTask;
-    private final Timer powerTimer = new Timer("PowerTimer");
+    private final Timer powerTimer;
     private final TimerTask powerTask;
     private final int powerTimeInMilliseconds;
     private double x;
@@ -34,6 +34,9 @@ public abstract class Powerup {
         this.zombies = zombies;
         this.color = color;
         this.powerTimeInMilliseconds = powerTimeInMilliseconds;
+        
+        timeoutTimer = new Timer(getClass().getSimpleName() + "TimeoutTimer");
+        powerTimer = new Timer(getClass().getSimpleName() + "PowerTimer");
         
         timeoutTask = new TimerTask() {
             @Override
@@ -71,10 +74,11 @@ public abstract class Powerup {
         timeoutTimer.cancel();
     }
     
-    public void timeout() {
+    private void timeout() {
         for(ChangeListener listener : timeoutListeners) {
             listener.changed();
         }
+        dispose();
     }
     
     public double getX() {
